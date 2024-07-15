@@ -313,12 +313,7 @@ class StochasticLeastSquaresID:
             self.costs.append(mean_cost_epoch)
             self.make_status_plot(epoch)
 
-        x_unpacked = self.unpack(x)
-        final_values = {'G': x_unpacked['G']}
-
-        # Pack results into data structure. Several of these are dummy values, such as the Kalman
-        # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
-        result = LeastSquaresIDResult(final_values['G'],
+        result = LeastSquaresIDResult(self.unpack(x)['G'],
                                       costs=np.array(self.costs),
                                       dz_errors=np.array(self.dz_errors),
                                       dx_errors=np.array(self.dx_errors),
