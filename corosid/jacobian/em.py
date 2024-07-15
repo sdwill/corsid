@@ -4,11 +4,11 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike
 
+from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from corosid.jacobian.EStep import EStep
 from corosid.jacobian.MStep import MStep, cov_to_opt, opt_to_cov
 from corosid.jacobian.config import EM_NUM_ITER
 from corosid.jacobian.config import SCIPY_TOL
-from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 
 log = logging.getLogger(__name__)
 

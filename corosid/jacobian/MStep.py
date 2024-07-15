@@ -3,10 +3,10 @@ import numpy as np
 from jax import numpy as jnp
 from scipy.optimize import minimize
 
+from corosid.common.batch_linalg import batch_vvop, batch_mmop
 from corosid.jacobian.config import USE_ADAM, USE_SCIPY, SCIPY_METHOD, SCIPY_TOL, SCIPY_OPT, \
     ADAM_ALPHA, ADAM_BETA1
 from corosid.jax import differentiable as d, make_unpacker, pack
-from corosid.common.batch_linalg import batch_vvop, batch_mmop
 
 OPT_KEYS = {
     'G': 'G',

@@ -3,14 +3,14 @@ from dataclasses import dataclass
 
 import jax
 import numpy as np
-from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from numpy.typing import ArrayLike
 from scipy.optimize import minimize
 
-from corosid.jacobian.config import USE_ADAM, \
-    ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
+from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from corosid.jacobian.EStep import EStep
 from corosid.jacobian.MStep import MStep, opt_to_cov, cov_to_opt
+from corosid.jacobian.config import USE_ADAM, \
+    ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
 from corosid.jax import make_unpacker, pack
 
 log = logging.getLogger(__name__)

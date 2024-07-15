@@ -2,19 +2,19 @@ import logging
 from dataclasses import dataclass
 
 import jax
+import jax.numpy as jnp
 import numpy as np
-from corosid.common import batch_linalg as bl
-from corosid.jax import differentiable as d
 from numpy.typing import ArrayLike
 from scipy.optimize import minimize
 
+from corosid.common import batch_linalg as bl
+from corosid.common.util import compare
+from corosid.common.util import l1_pairwise_probe_estimator
+from corosid.jacobian.MStep import MStep
 from corosid.jacobian.config import USE_ADAM, \
     ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
-from corosid.jacobian.MStep import MStep, opt_to_cov, cov_to_opt
-from corosid.common.util import l1_pairwise_probe_estimator
+from corosid.jax import differentiable as d
 from corosid.jax import make_unpacker, pack
-from corosid.common.util import compare
-import jax.numpy as jnp
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)

@@ -1,10 +1,12 @@
-import matplotlib
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
 import re
-matplotlib.use('TkAgg')
 from datetime import datetime
+from pathlib import Path
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+
+matplotlib.use('TkAgg')
 
 
 def parse_log(path):
