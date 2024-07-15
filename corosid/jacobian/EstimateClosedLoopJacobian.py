@@ -7,7 +7,7 @@ from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from corosid.jacobian.MStep import MStep
 from corosid.jacobian.expectation_maximization import run_expectation_maximization
 from corosid.jacobian.maximum_likelihood import run_maximum_likelihood
-from corosid.jacobian.least_squares import run_prediction_error_minimization
+from corosid.jacobian.least_squares import run_least_squares_identification
 
 log = logging.getLogger(__name__)
 
@@ -36,14 +36,14 @@ class EstimateClosedLoopJacobian(BaseEstimateParameters):
                 targets=targets,
                 tol=tol
             )
-        elif algorithm == 'pem':
-            solution = run_prediction_error_minimization(
+        elif algorithm == 'ls':
+            solution = run_least_squares_identification(
                 self.training,
                 self.tree['G'],
                 tol=tol
             )
         else:
-            valid_values = ['ml', 'em', 'pem']
+            valid_values = ['ml', 'em', 'ls']
             raise ValueError(f'Valid values for algorithm: {[alg for alg in valid_values]}')
 
         self.solution = solution

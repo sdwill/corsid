@@ -57,11 +57,11 @@ identified = parse_ecsv(RESULTS_DIR / '2024-02-27' / '2024-02-27_15-38-46_wfsc-i
 # prior = parse_ecsv(RESULTS_DIR / '2023-12-12' / '2023-12-12_15-03-14_wfsc' / 'results.txt')
 #
 # # 1212.7
-# pem_data = parse_ecsv(RESULTS_DIR / '2023-12-12' / '2023-12-12_16-25-07_wfsc-id-continue' /
+# ls_data = parse_ecsv(RESULTS_DIR / '2023-12-12' / '2023-12-12_16-25-07_wfsc-id-continue' /
 #                       '2023-12-12_16-25-07_wfsc' / 'results.txt')
 #
 # # 1213.2
-# pem_state = parse_ecsv(RESULTS_DIR / '2023-12-13' / '2023-12-13_08-41-28_wfsc-id-continue' /
+# ls_state = parse_ecsv(RESULTS_DIR / '2023-12-13' / '2023-12-13_08-41-28_wfsc-id-continue' /
 #                        '2023-12-13_08-41-28_wfsc' / 'results.txt')
 #
 # # 1212.8
@@ -79,9 +79,9 @@ ax.semilogy(prior['iteration'], prior['mean_contrast'],
             lw=2, ls='dashdot', label='Mismatched model')
 ax.semilogy(identified['iteration'], identified['mean_contrast'],
             lw=2, ls='dashdot', label='Identified model')
-# ax.semilogy(pem_data['iteration'], pem_data['mean_contrast'],
+# ax.semilogy(ls_data['iteration'], pem_data['mean_contrast'],
 #             lw=2, ls='dashdot', label='PEM (data-domain)')
-# ax.semilogy(pem_state['iteration'], pem_state['mean_contrast'],
+# ax.semilogy(ls_state['iteration'], pem_state['mean_contrast'],
 #             lw=2, ls='dashdot', label='PEM (state-domain)')
 # ax.semilogy(ml['iteration'], ml['mean_contrast'],
 #             lw=2, ls='dashed', label='ML')

@@ -150,7 +150,7 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: d
     return J
 
 
-def run_prediction_error_minimization(
+def run_least_squares_identification(
         data,
         G0,
         tol=SCIPY_TOL
@@ -175,8 +175,8 @@ def run_prediction_error_minimization(
         estimator.G = G
         estimator.H = H
 
-        # For prediction error minimization (HGu - dz), this is only necessary for evaluating the
-        # performance metrics # error, x_error, and z_error
+        # For least-squares minimization (HGu - dz), this is only necessary for evaluating the
+        # performance metrics error, x_error, and z_error
         estimator.run()
 
         # J, grads = jax.value_and_grad(least_squares_state_cost, argnums=(0,))(

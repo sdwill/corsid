@@ -255,7 +255,7 @@ class EstimatedClosedLoopHicatJacobian(EstimateClosedLoopJacobian):
 
 class EstimateOpenLoopHicatJacobian:
     """
-    Estimate a HiCAT Jacobian from an open-loop dataset using prediction error minimization +
+    Estimate a HiCAT Jacobian from an open-loop dataset using a least-squares cost function +
     stochastic optimization (with Adam).
     """
     def __init__(self, target_dir, output_dir, G0, wl):

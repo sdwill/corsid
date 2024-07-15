@@ -21,8 +21,8 @@ output_dir = RESULTS_DIR / f'{today()}'
 WLS = [620]
 
 SYSTEM_ID_TARGET_DIR = DATA_ROOT / '2024-01-20T15-55-46_wavefront_control_experiment'
-SPEM_NUM_EPOCHS = 30
-SPEM_BATCH_SIZE = 100
+SYSTEM_ID_NUM_EPOCHS = 30
+SYSTEM_ID_BATCH_SIZE = 100
 ADAM_ALPHA = 1e-8
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
@@ -50,15 +50,14 @@ for wl in WLS:
     system_id.run_estep(sol)
     zerr = system_id.error[-1]
 
-    #
-    # system_id_result = spem.run(NUM_TRAINING_ITER,
-    #                             SPEM_BATCH_SIZE,
-    #                             TRAINING_ITER_START,
-    #                             SPEM_NUM_EPOCHS,
-    #                             ADAM_ALPHA, ADAM_BETA1, ADAM_BETA2, ADAM_EPS)
-    #
-    # G_final = hicat.real_G_to_complex(system_id_result.G)
-    #
-    # hicat.write_G_to_hicat_format(G_final, dark_zone,
-    #                               output_dir / f'jacobian_identified_{today()}_{wl}nm.fits')
-    #
+    system_id_result = system_id.run(NUM_TRAINING_ITER,
+                                     SYSTEM_ID_BATCH_SIZE,
+                                     TRAINING_ITER_START,
+                                     SYSTEM_ID_NUM_EPOCHS,
+                                     ADAM_ALPHA, ADAM_BETA1, ADAM_BETA2, ADAM_EPS)
+
+    G_final = hicat.real_G_to_complex(system_id_result.G)
+
+    hicat.write_G_to_hicat_format(G_final, dark_zone,
+                                  output_dir / f'jacobian_identified_{today()}_{wl}nm.fits')
+
