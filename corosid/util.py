@@ -3,6 +3,7 @@ from typing import Dict, AnyStr, Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numpy.typing import NDArray
 
@@ -426,82 +427,6 @@ def l1_rts_smoother(x_posts, x_priors, P_posts, P_priors):
 def bad_to_black(name):
     """ Get a colormap with bad pixels set to black """
     return plt.cm.get_cmap(name).with_extremes(bad='k')
-
-
-def check_state_transition(estep, dark_zone, k):
-    """
-    Spot check the state predicted from iteration k-1 against the state estimated in iteration k
-    """
-    Gu = bl.batch_mvip(estep.G, estep.us[k])
-    xm1 = estep.xs[k - 1]  # State estimate in previous iteration
-    x_pred = xm1 + Gu      # Predicted state in current iteration
-    x = estep.xs[k]        # Actual state estimate in current iteration
-
-    print(100 * compare(Gu, x - xm1))
-    print(100 * compare(x_pred, x))
-
-    I_delta = np.abs(make_E_from_state(x) - make_E_from_state(xm1)) ** 2
-    I_delta = embed(I_delta, dark_zone, mask_output=True)
-
-    I_Gu = embed(np.abs(make_E_from_state(Gu)) ** 2, dark_zone, mask_output=True)
-
-    fig, axs = plt.subplots(dpi=150, ncols=2, figsize=(10, 4))
-    ax = axs[0]
-    ax.imshow(I_Gu, cmap=bad_to_black('inferno'), norm=colors.LogNorm(vmin=1e-8, vmax=1e-3))
-    # ax.imshow(np.abs(I - coron) / coron,
-    #           cmap=bad_to_black('inferno'), norm=colors.Normalize())
-
-    ax = axs[1]
-    ax.imshow(I_delta, cmap=bad_to_black('inferno'), norm=colors.LogNorm(vmin=1e-8, vmax=1e-3))
-
-    plt.show()
-
-def check_predicted_intensity(estep: EstimateStates, dark_zone: np.ndarray,
-                              target_dir: Path, k: int,
-                              wl: int):
-    """
-    Spot check the predicted dark-zone intensity against the measured image (binned down to the
-    same array size)
-    """
-    I00 = get_I00(target_dir, k, wl)
-    E = embed(estep.xs[k][:, 0] + 1j * estep.xs[k][:, 1], dark_zone, mask_output=True)
-    I = np.abs(E) ** 2
-    coron = np.ma.masked_where(
-        dark_zone == 0,
-        bin(fits.getdata(target_dir / f'iteration_{k:04d}' / 'coron_640nm.fits') / I00,
-                 binfac=3))
-
-    fig, axs = plt.subplots(dpi=150, ncols=2, figsize=(10, 4))
-    ax = axs[0]
-    ax.imshow(I, cmap=bad_to_black('inferno'), norm=colors.LogNorm(vmin=1e-8, vmax=1e-3))
-    # ax.imshow(np.abs(I - coron) / coron,
-    #           cmap=bad_to_black('inferno'), norm=colors.Normalize())
-
-    ax = axs[1]
-    ax.imshow(coron, cmap=bad_to_black('inferno'), norm=colors.LogNorm(vmin=1e-8, vmax=1e-3))
-
-    print(100 * compare(I[dark_zone], coron[dark_zone]))
-
-
-def check_predicted_pairwise_data(dark_zone, k, probe_number: int):
-    """
-    Spot check the predicted probe difference images against the measured ones
-    """
-    z_pred = bl.batch_mvip(estep.H, estep.xs[k])
-    z = estep.zs[k]
-    p = probe_number  # Alias this to a mathematical variable
-
-    fig, axs = plt.subplots(dpi=150, ncols=2, figsize=(10, 4))
-    ax = axs[0]
-    ax.imshow(embed(z_pred[:, p], dark_zone, mask_output=True),
-              cmap=bad_to_black('RdBu'), norm=colors.CenteredNorm())
-
-    ax = axs[1]
-    ax.imshow(embed(z[:, p], dark_zone, mask_output=True),
-              cmap=bad_to_black('RdBu'), norm=colors.CenteredNorm())
-
-    print(100 * compare(z, z_pred))
-
 
 def get_splits(variables: Dict[AnyStr, NDArray]) -> NDArray[int]:
     """
