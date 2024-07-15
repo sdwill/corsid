@@ -66,7 +66,7 @@ def eval_dz_error(G, H, us, zs):
     for k in range(1, num_iter):
         dz = zs[k] - zs[k-1]
         dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, us[k]))
-        dz_err_per_iter[k-1] += util.compare(dz_pred, dz)
+        dz_err_per_iter[k-1] = util.compare(dz_pred, dz)
 
     return dz_err_per_iter.mean()
 
@@ -113,21 +113,16 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
     num_pix = zs[0].shape[0]
 
     err = jnp.zeros((num_pix, num_iter - 1))
-    dztot = 0.
 
     for k in range(1, num_iter):
         dz = zs[k] - zs[k-1]
-        dztot = dztot + d.batch_vvip(dz, dz)
-        # uu = d.batch_vvip(us[k], us[k])
-
-        Gu = d.batch_mvip(G, us[k].astype(jnp.float64))  # Cast u to float to avoid Jax overflow bug
-        dz_pred = d.batch_mvip(H, Gu)
+        # Note: u casted to float to avoid Jax overflow bug
+        dz_pred = d.batch_mvip(H, d.batch_mvip(G, us[k].astype(np.float64)))
         dzerr = dz_pred - dz
-        err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr))
+        err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr) / d.batch_vvip(dz, dz))
 
     # Motivation of dztot: scale the cost function so that it's invariant to the contrast level
-    dztot = (dztot / (num_iter - 1)).mean()
-    J = err.mean() / dztot
+    J = err.mean()
     return J
 
 @dataclass
@@ -209,7 +204,7 @@ class StochasticLeastSquaresID:
     """
     Estimate Jacobian using a least-squares cost function and stochastic optimization (with Adam).
     """
-    def __init__(self, target_dir, output_dir, G0):
+    def __init__(self, output_dir, G0):
         self.costs = []
         self.dz_errors = []
         self.dx_errors = []
@@ -322,8 +317,6 @@ class StochasticLeastSquaresID:
         return result
 
 def run_stochastic_least_squares_id(
-        target_dir,
-        output_dir,
         G0,
         load_data,
         num_training,
