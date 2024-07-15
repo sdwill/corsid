@@ -292,7 +292,7 @@ class EstimateOpenLoopHicatJacobian:
         self.estep.G = G
         self.estep.H = H
 
-        # For prediction error minimization (HGu - dz), this is only necessary for evaluating the
+        # For least-squares identification (HGu - dz), this is only necessary for evaluating the
         # performance metrics # error, x_error, and z_error
         self.estep.run()
         self.error.append(np.mean(self.estep.eval_error(self.data.zs)))
@@ -302,15 +302,13 @@ class EstimateOpenLoopHicatJacobian:
     def scipy_cost(self, x: np.ndarray):
         sol = self.unpack(x)
         self.run_estep(sol)
-        # forward_and_gradient = jax.value_and_grad(transition_error_cost, argnums=(0,))
+        # forward_and_gradient = jax.value_and_grad(least_squares_state_cost, argnums=(0,))
         forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
         J, grads = forward_and_gradient(sol['G'],
                                         self.data.Psi,
                                         self.data.us,
                                         self.estep.xs,
                                         self.data.zs)
-        # J, grads = jax.value_and_grad(prediction_error_cost, argnums=(0,))(G, data.Psi, data.us,
-        #                                                                    estep.xs, data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
                  f'err = {self.error[-1]:0.3e}')
