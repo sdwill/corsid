@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 from tqdm import tqdm
 
 from corosid import batch_linalg as bl, differentiable as d
-from corosid.AdamOptimizer import AdamOptimizer
+from corosid.adam import AdamOptimizer
 from corosid.optutil import make_unpacker, pack
 from corosid.util import compare
 from corosid.util import l1_pairwise_probe_estimator
