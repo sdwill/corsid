@@ -3,87 +3,76 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.optimize import minimize
+from tqdm import tqdm
 
+from corosid.common import AdamOptimizer
 from corosid.common import batch_linalg as bl, differentiable as d
+from corosid.common.optutil import make_unpacker, pack
 from corosid.common.util import compare
 from corosid.common.util import l1_pairwise_probe_estimator
-from corosid.jacobian.MStep import MStep
+from corosid.common.util import today, now
 from corosid.jacobian.config import USE_ADAM, \
     ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
-from corosid.common.optutil import make_unpacker, pack
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)
 
 
-class EstimationStep:  # Sort of like an E-step, but using a pairwise probe estimator
-    def __init__(self, us, zs, num_iter, num_pix, len_x, len_z):
-        self.us = us
-        self.zs = zs
-        self.num_iter = num_iter
-        self.num_pix = num_pix
-        self.len_x = len_x
-        self.len_z = len_z
-        self.xs = {}  # State estimate, (num_iter, num_pix, len_x); set by run()
+def estimate_states(H, zs):
+    """ Run pairwise probe estimation to estimate the state in each time step """
+    num_iter = len(list(zs.keys()))
+    xs = {}
+    for k in tqdm(range(num_iter), desc='Estimating states', leave=False):
+        xs[k] = l1_pairwise_probe_estimator(H, zs[k])
 
-        self.G = None
-        self.H = None
+    return xs
 
-    def run(self):
-        K = self.num_iter
-        from tqdm import tqdm
+def eval_z_error(H, xs, zs):
+    """ Evaluate the error between H*x[k] and z[k] in each time step """
+    num_iter = len(list(zs.keys()))
+    z_err_per_iter = np.zeros(num_iter)
+    for k in range(num_iter):
+        z_err_per_iter[k] = compare(bl.batch_mvip(H, xs[k]), zs[k])
 
-        for k in tqdm(range(K), desc='Running pairwise estimator', leave=False):
-            self.xs[k] = l1_pairwise_probe_estimator(self.H, self.zs[k])
+    return z_err_per_iter.mean()
 
-    def eval_z_err(self, zs):
-        z_err_per_iter = np.zeros(self.num_iter)
-        for k in range(self.num_iter):
-            z_err_per_iter[k] = compare(bl.batch_mvip(self.H, self.xs[k]), zs[k])
+def eval_dx_error(G, xs, us):
+    """
+    Evaluate the error between G*u[k] and x[k] - x[k-1] in each time step.
+    This measures the consistency between the Jacobian, G, and the estimated state history.
+    """
+    num_iter = len(list(xs.keys()))
+    dx_err_per_iter = np.zeros(num_iter - 1)
+    for k in range(1, num_iter):
+        dx_err_per_iter[k-1] = compare(bl.batch_mvip(G, us[k]), xs[k] - xs[k - 1])
 
-        return z_err_per_iter.mean()
+    return dx_err_per_iter.mean()
 
-    def eval_x_err(self):
-        x_err_per_iter = np.zeros(self.num_iter - 1)
-        for k in range(1, self.num_iter):
-            x_err_per_iter[k-1] = compare(bl.batch_mvip(self.G, self.us[k]),
-                                          self.xs[k] - self.xs[k - 1])
+def eval_dz_error(G, H, us, zs):
+    """
+    Evaluatate the error between H*G*u[k] and z[k] - z[k-1] in each time step; i.e., the change
+    in pairwise probe data predicted by the Jacobian.
 
-        return x_err_per_iter.mean()
+    Derivation from state-space model:
+        x[k] = x[k-1] + G*u[k] + noise
+        z[k] = H*x[k] + noise
+     => z[k] = H*x[k-1] + H*G*u[k] + noise
+             = z[k-1] + H*G*u[k] + noise
+     => z[k] - z[k-1] = H*G*u[k] + noise
+    """
+    num_iter = len(list(zs.keys()))
+    dz_err_per_iter = np.zeros(num_iter - 1)
 
-    def eval_error(self, zs):
-        """
-        Validation error metric that compares predictions to purely observable values (differences
-        of pairwise data vectors).
+    for k in range(1, num_iter):
+        dz = zs[k] - zs[k-1]
+        dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, us[k]))
+        dz_err_per_iter[k-1] += compare(dz_pred, dz)
 
-            x[k] = x[k-1] + G*u[k] + noise
-            z[k] = H*x[k] + noise
-         => z[k] = H*x[k-1] + H*G*u[k] + noise
-                 = z[k-1] + H*G*u[k] + noise
-         => z[k] - z[k-1] = H*G*u[k] + noise
-        """
-        err_per_iter = np.zeros(self.num_iter - 1)
-
-        for k in range(1, self.num_iter):
-            dz = zs[k] - zs[k-1]
-            dz_pred = bl.batch_mvip(self.H, bl.batch_mvip(self.G, self.us[k]))
-            err_per_iter[k-1] += compare(dz_pred, dz)
-
-        return err_per_iter.mean()
-
-
-@dataclass
-class SystemIDResult:
-    G: ArrayLike
-    costs: ArrayLike
-    error: ArrayLike
-    x_error: ArrayLike
-    z_error: ArrayLike
-    estep: EstimationStep
-
+    return dz_err_per_iter.mean()
 
 @jax.jit
 def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
@@ -115,9 +104,8 @@ def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict,
     J = err.mean()
     return J
 
-
 @jax.jit
-def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
+def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
     """
     Compute the error between the predicted changes in observations, H*G*u[k], and the actual
     changes in observations, z[k] - z[k-1]. This is similar to transition error, but mapping all
@@ -126,7 +114,7 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: d
     G = G.astype(jnp.float64)
     H = 4 * d.batch_mt(d.batch_mmip(G, Psi))
     num_iter = len(zs.keys())
-    num_pix = xs[0].shape[0]
+    num_pix = zs[0].shape[0]
 
     err = jnp.zeros((num_pix, num_iter - 1))
     dztot = 0.
@@ -146,6 +134,13 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: d
     J = err.mean() / dztot
     return J
 
+@dataclass
+class LeastSquaresIDResult:
+    G: ArrayLike
+    costs: ArrayLike
+    dz_errors: ArrayLike
+    dx_errors: ArrayLike
+    z_errors: ArrayLike
 
 def run_least_squares_identification(
         data,
@@ -153,9 +148,9 @@ def run_least_squares_identification(
         tol=SCIPY_TOL
 ):
     costs = []
-    error = []
-    x_error = []
-    z_error = []
+    dz_errors = []
+    dx_errors = []
+    z_errors = []
 
     # Starting guess for optimizer, containing only the values that we are optimizing
     starting_guess = {'G': G0.astype(np.float64)}
@@ -167,25 +162,20 @@ def run_least_squares_identification(
         G = sol['G']
         H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
 
-        estimator = EstimationStep(data.us, data.zs, data.num_iter, data.num_pix, data.len_x,
-                                   data.len_z)
-        estimator.G = G
-        estimator.H = H
-
         # For least-squares minimization (HGu - dz), this is only necessary for evaluating the
         # performance metrics error, x_error, and z_error
-        estimator.run()
+        xs = estimate_states(H, data.zs)
 
         # J, grads = jax.value_and_grad(least_squares_state_cost, argnums=(0,))(
         #     G, data.Psi, data.us, estimator.xs, data.zs)
-        J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(G, data.Psi, data.us,
-                                                                        estimator.xs, data.zs)
+        J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(
+            G, data.Psi, data.us, data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
 
         costs.append(J)
-        error.append(np.mean(estimator.eval_error(data.zs)))
-        x_error.append(estimator.eval_x_err())
-        z_error.append(estimator.eval_z_err(data.zs))
+        z_errors.append(eval_z_error(H, xs, data.zs))
+        dx_errors.append(eval_dx_error(G, xs, data.us))
+        dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
 
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}')
         return J, gradient
@@ -213,13 +203,152 @@ def run_least_squares_identification(
     # the initial value.
     final_values = {'G': res.x['G']}
 
-    # Pack results into data structure. Several of these are dummy values, such as the Kalman
-    # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
-    result = SystemIDResult(final_values['G'],
-                            costs=np.array(costs),
-                            error=np.array(error),
-                            x_error=np.array(x_error),
-                            z_error=np.array(z_error),
-                            estep=EstimationStep)
+    result = LeastSquaresIDResult(
+        final_values['G'],
+        costs=np.array(costs),
+        dz_errors=np.array(dz_errors),
+        dx_errors=np.array(dx_errors),
+        z_errors=np.array(z_errors),
+    )
 
+    return result
+
+class StochasticLeastSquaresID:
+    """
+    Estimate Jacobian using a least-squares cost function and stochastic optimization (with Adam).
+    """
+    def __init__(self, target_dir, output_dir, G0):
+        self.costs = []
+        self.dz_errors = []
+        self.dx_errors = []
+        self.z_errors = []
+        self.target_dir = target_dir
+        self.data = None
+
+        # Starting guess for optimizer, containing only the values that we are optimizing
+        self.starting_guess = {'G': G0.astype(np.float64)}
+        self.unpack = make_unpacker(self.starting_guess)
+        self.adam = None
+
+        self.output_dir = output_dir / f'{today()}_{now()}_systemid'
+        self.output_dir.mkdir(exist_ok=True, parents=True)
+        logging.getLogger().addHandler(
+            logging.FileHandler(self.output_dir / 'output.log')
+        )
+        self.status_dir = self.output_dir / 'status'
+        self.status_dir.mkdir(exist_ok=True)
+
+    def estimate_states(self, sol: dict):
+        G = sol['G']
+        H = 4 * bl.batch_mt(bl.batch_mmip(G, self.data.Psi))
+
+        # This is only necessary for evaluating the performance metrics (error, x_error, z_error)
+        xs = estimate_states(H, self.data.zs)
+        self.dz_errors.append(eval_dz_error(G, H, self.data.us, self.data.zs))
+        self.dx_errors.append(eval_dx_error(G, xs, self.data.us))
+        self.z_errors.append(eval_z_error(H, xs, self.data.zs))
+
+    def opt_cost(self, x: np.ndarray):
+        """
+        The actual cost function passed to the optimizer. Accepts a single real-valued vector, x,
+        and returns the value of the cost function, J, as well as its derivative with respect to x,
+        dJ/dx.
+        """
+        sol = self.unpack(x)
+        self.estimate_states(sol)
+        forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
+        J, grads = forward_and_gradient(sol['G'],
+                                        self.data.Psi,
+                                        self.data.us,
+                                        self.data.zs)
+        gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
+        log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
+                 f'dz_err = {self.dz_errors[-1]:0.3e}')
+        return J, gradient
+
+    def make_status_plot(self, epoch):
+        dz_errors = np.array(self.dz_errors)
+        dx_errors = np.array(self.dx_errors)
+        z_errors = np.array(self.z_errors)
+
+        fig, axs = plt.subplots(dpi=150, layout='constrained', ncols=2, figsize=(7, 3))
+        ax = axs[0]
+        ax.plot(np.arange(dz_errors.size), 100 * dz_errors, '-', label='Data transition error')
+        ax.plot(np.arange(dx_errors.size), 100 * dx_errors, '-', label='State transition error')
+        ax.plot(np.arange(z_errors.size), 100 * z_errors, '-', label='Data error')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Error [%]')
+
+        # Scale the y-axis limits to the largest starting error metric, so that the limits don't
+        # change when L-BFGS has a hiccup iteration that causes a temporarily huge error value.
+        ax.set_ylim([-5, 105 * np.max([dz_errors[0], dx_errors[0], z_errors[0]])])
+        ax.set_title('Convergence', weight='bold')
+        ax.grid(True, linewidth=0.5, linestyle='dotted')
+        ax.legend(loc='best')
+
+        ax = axs[1]
+        ax.plot(np.arange(len(self.costs)), self.costs, 'o-')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Cost')
+
+        ax.set_title(r'Cost vs. training epoch')
+        ax.grid(True, linewidth=0.5, linestyle='dotted')
+
+        fig.savefig(self.status_dir / f'epoch_{epoch:03d}')
+        plt.close(fig)
+
+    def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
+            adam_alpha, adam_beta1, adam_beta2, adam_eps):
+        batch_starts = np.arange(training_iter_start, num_training - batch_size, batch_size)
+        x = pack(self.starting_guess)
+
+        for epoch in range(num_epochs):
+            log.info(f'Epoch {epoch}')
+            np.random.shuffle(batch_starts)
+            self.adam = AdamOptimizer(
+                self.opt_cost, x, num_iter=len(batch_starts),
+                alpha=adam_alpha,
+                beta1=adam_beta1, beta2=adam_beta2, eps=adam_eps)
+
+            for batch_index, batch_start in enumerate(batch_starts):
+                log.info(f'Batch {batch_index} of {batch_starts.size}')
+                iters_to_load = range(batch_start, batch_start + batch_size)
+                self.data = load_data(iters_to_load)
+                self.adam.x = x
+                J, x = self.adam.iterate(batch_index)
+
+            mean_cost_epoch = np.mean(self.adam.Js)
+            self.costs.append(mean_cost_epoch)
+            self.make_status_plot(epoch)
+
+        x_unpacked = self.unpack(x)
+        final_values = {'G': x_unpacked['G']}
+
+        # Pack results into data structure. Several of these are dummy values, such as the Kalman
+        # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
+        result = LeastSquaresIDResult(final_values['G'],
+                                      costs=np.array(self.costs),
+                                      dz_errors=np.array(self.dz_errors),
+                                      dx_errors=np.array(self.dx_errors),
+                                      z_errors=np.array(self.z_errors))
+
+        return result
+
+def run_stochastic_least_squares_id(
+        target_dir,
+        output_dir,
+        G0,
+        load_data,
+        num_training,
+        training_iter_start,
+        batch_size,
+        num_epochs,
+        adam_alpha,
+        adam_beta1,
+        adam_beta2,
+        adam_eps
+):
+    system_id = StochasticLeastSquaresID(target_dir, output_dir, G0)
+    result = system_id.run(load_data, num_training, batch_size, training_iter_start, num_epochs,
+                           adam_alpha, adam_beta1, adam_beta2, adam_eps)
     return result
