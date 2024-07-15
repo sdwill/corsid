@@ -9,12 +9,8 @@ from numpy.typing import ArrayLike
 from scipy.optimize import minimize
 from tqdm import tqdm
 
-from corosid import batch_linalg as bl, differentiable as d
+from corosid import util, batch_linalg as bl, differentiable as d
 from corosid.adam import AdamOptimizer
-from corosid.util import make_unpacker, pack
-from corosid.util import compare
-from corosid.util import l1_pairwise_probe_estimator
-from corosid.util import today, now
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)
@@ -25,7 +21,7 @@ def estimate_states(H, zs):
     num_iter = len(list(zs.keys()))
     xs = {}
     for k in tqdm(range(num_iter), desc='Estimating states', leave=False):
-        xs[k] = l1_pairwise_probe_estimator(H, zs[k])
+        xs[k] = util.l1_pairwise_probe_estimator(H, zs[k])
 
     return xs
 
@@ -34,7 +30,7 @@ def eval_z_error(H, xs, zs):
     num_iter = len(list(zs.keys()))
     z_err_per_iter = np.zeros(num_iter)
     for k in range(num_iter):
-        z_err_per_iter[k] = compare(bl.batch_mvip(H, xs[k]), zs[k])
+        z_err_per_iter[k] = util.compare(bl.batch_mvip(H, xs[k]), zs[k])
 
     return z_err_per_iter.mean()
 
@@ -46,7 +42,7 @@ def eval_dx_error(G, xs, us):
     num_iter = len(list(xs.keys()))
     dx_err_per_iter = np.zeros(num_iter - 1)
     for k in range(1, num_iter):
-        dx_err_per_iter[k-1] = compare(bl.batch_mvip(G, us[k]), xs[k] - xs[k - 1])
+        dx_err_per_iter[k-1] = util.compare(bl.batch_mvip(G, us[k]), xs[k] - xs[k - 1])
 
     return dx_err_per_iter.mean()
 
@@ -68,7 +64,7 @@ def eval_dz_error(G, H, us, zs):
     for k in range(1, num_iter):
         dz = zs[k] - zs[k-1]
         dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, us[k]))
-        dz_err_per_iter[k-1] += compare(dz_pred, dz)
+        dz_err_per_iter[k-1] += util.compare(dz_pred, dz)
 
     return dz_err_per_iter.mean()
 
@@ -157,7 +153,7 @@ def run_batch_least_squares_id(
 
     # Starting guess for optimizer, containing only the values that we are optimizing
     starting_guess = {'G': G0.astype(np.float64)}
-    unpack = make_unpacker(starting_guess)
+    unpack = util.make_unpacker(starting_guess)
 
     def cost_for_optimizer(x):
         sol = unpack(x)
@@ -184,8 +180,7 @@ def run_batch_least_squares_id(
         return J, gradient
 
     if method == 'adam':
-        from corosid.common import AdamOptimizer
-        adam = AdamOptimizer(cost_for_optimizer, x0=pack(starting_guess),
+        adam = AdamOptimizer(cost_for_optimizer, x0=util.pack(starting_guess),
                              num_iter=options['num_iter'],
                              alpha=options['alpha'],
                              beta1=options['beta1'],
@@ -194,7 +189,7 @@ def run_batch_least_squares_id(
         Js, solution = adam.optimize()
 
     else:
-        res = minimize(cost_for_optimizer, x0=pack(starting_guess), jac=True,
+        res = minimize(cost_for_optimizer, x0=util.pack(starting_guess), jac=True,
                        method=method, options=options, tol=tol)
         solution = res.x
 
@@ -222,10 +217,10 @@ class StochasticLeastSquaresID:
 
         # Starting guess for optimizer, containing only the values that we are optimizing
         self.starting_guess = {'G': G0.astype(np.float64)}
-        self.unpack = make_unpacker(self.starting_guess)
+        self.unpack = util.make_unpacker(self.starting_guess)
         self.adam = None
 
-        self.output_dir = output_dir / f'{today()}_{now()}_systemid'
+        self.output_dir = output_dir / f'{util.today()}_{util.now()}_systemid'
         self.output_dir.mkdir(exist_ok=True, parents=True)
         logging.getLogger().addHandler(
             logging.FileHandler(self.output_dir / 'output.log')
@@ -295,7 +290,7 @@ class StochasticLeastSquaresID:
     def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
             adam_alpha, adam_beta1, adam_beta2, adam_eps):
         batch_starts = np.arange(training_iter_start, num_training - batch_size, batch_size)
-        x = pack(self.starting_guess)
+        x = util.pack(self.starting_guess)
 
         for epoch in range(num_epochs):
             log.info(f'Epoch {epoch}')
