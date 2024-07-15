@@ -1,0 +1,14 @@
+name: corosid
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.6
+  - numpy
+  - scipy
+  - matplotlib
+  - astropy
+  - pyfftw
+  - jax
+  - tqdm
+  - asdf

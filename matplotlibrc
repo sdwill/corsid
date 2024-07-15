@@ -1,0 +1,29 @@
+### Backend
+backend      : MacOSX
+
+### Fonts
+text.usetex : False
+font.family : sans-serif
+mathtext.fontset : cm
+lines.linewidth : 1.0
+font.size : 8
+legend.fontsize : 7
+axes.labelsize : 7
+xtick.labelsize : 7
+ytick.labelsize : 7
+axes.titlesize : 9
+axes.titleweight : bold
+axes.titlepad : 3.0
+
+### Figures and axes
+figure.figsize : 3.0, 3.0
+figure.dpi : 250
+
+### Saving
+savefig.bbox : tight
+savefig.format : png
+
+### Images
+image.cmap   : viridis
+image.origin : lower
+image.interpolation : none
