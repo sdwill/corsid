@@ -9,12 +9,12 @@ from numpy.typing import ArrayLike
 from scipy.optimize import minimize
 from tqdm import tqdm
 
-from corosid.common import AdamOptimizer
-from corosid.common import batch_linalg as bl, differentiable as d
-from corosid.common.optutil import make_unpacker, pack
-from corosid.common.util import compare
-from corosid.common.util import l1_pairwise_probe_estimator
-from corosid.common.util import today, now
+from corosid import batch_linalg as bl, differentiable as d
+from corosid.AdamOptimizer import AdamOptimizer
+from corosid.optutil import make_unpacker, pack
+from corosid.util import compare
+from corosid.util import l1_pairwise_probe_estimator
+from corosid.util import today, now
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)
