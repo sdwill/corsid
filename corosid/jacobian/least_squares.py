@@ -248,7 +248,7 @@ class StochasticLeastSquaresID:
         self.dx_errors.append(eval_dx_error(G, xs, self.data.us))
         self.z_errors.append(eval_z_error(H, xs, self.data.zs))
 
-    def opt_cost(self, x: np.ndarray):
+    def cost_for_optimizer(self, x: np.ndarray):
         """
         The actual cost function passed to the optimizer. Accepts a single real-valued vector, x,
         and returns the value of the cost function, J, as well as its derivative with respect to x,
@@ -306,7 +306,7 @@ class StochasticLeastSquaresID:
             log.info(f'Epoch {epoch}')
             np.random.shuffle(batch_starts)
             self.adam = AdamOptimizer(
-                self.opt_cost, x, num_iter=len(batch_starts),
+                self.cost_for_optimizer, x, num_iter=len(batch_starts),
                 alpha=adam_alpha,
                 beta1=adam_beta1, beta2=adam_beta2, eps=adam_eps)
 
