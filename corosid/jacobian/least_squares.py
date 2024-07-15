@@ -93,7 +93,7 @@ class EstimationResult:
 
 
 @jax.jit
-def transition_error_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
+def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
     """
     Compute the error between the predicted state changes, G*u[k], and actual state changes,
     x[k] - x[k-1], summed over all states.
@@ -124,7 +124,7 @@ def transition_error_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs
 
 
 @jax.jit
-def prediction_error_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
+def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
     """
     Compute the error between the predicted changes in observations, H*G*u[k], and the actual
     changes in observations, z[k] - z[k-1]. This is similar to transition error, but mapping all
@@ -185,8 +185,8 @@ def run_prediction_error_minimization(
 
         # J, grads = jax.value_and_grad(transition_error_cost, argnums=(0,))(G, data.Psi, data.us,
         #                                                                    estimator.xs, data.zs)
-        J, grads = jax.value_and_grad(prediction_error_cost, argnums=(0,))(G, data.Psi, data.us,
-                                                                           estimator.xs, data.zs)
+        J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(G, data.Psi, data.us,
+                                                                        estimator.xs, data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
 
         # Dummy: the cost is not a likelihood, but the plotter expects one, so just use -cost

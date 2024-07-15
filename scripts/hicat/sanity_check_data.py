@@ -33,7 +33,7 @@ system_id = hicat.EstimatedClosedLoopHicatJacobian(wr=wl,
                                                    output_dir=OUTPUT_DIR)
 
 #%%
-from corosid.jacobian.pem import EstimationStep
+from corosid.jacobian.least_squares import EstimationStep
 from corosid.common import batch_linalg as bl
 
 k0 = 38

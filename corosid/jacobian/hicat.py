@@ -13,7 +13,7 @@ from corosid.common import AdamOptimizer, TrainingData, batch_linalg as bl
 from corosid.common import util
 from corosid.common.util import embed, make_z_from_probe_images, today, now
 from corosid.jacobian import EstimateClosedLoopJacobian
-from corosid.jacobian.pem import (EstimationStep, EstimationResult, prediction_error_cost)
+from corosid.jacobian.least_squares import (EstimationStep, EstimationResult, least_squares_cost)
 from corosid.jax import make_unpacker, pack
 
 log = logging.getLogger(__name__)
@@ -303,7 +303,7 @@ class EstimateOpenLoopHicatJacobian:
         sol = self.unpack(x)
         self.run_estep(sol)
         # forward_and_gradient = jax.value_and_grad(transition_error_cost, argnums=(0,))
-        forward_and_gradient = jax.value_and_grad(prediction_error_cost, argnums=(0,))
+        forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
         J, grads = forward_and_gradient(sol['G'],
                                         self.data.Psi,
                                         self.data.us,

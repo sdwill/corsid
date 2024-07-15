@@ -7,7 +7,7 @@ from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from corosid.jacobian.MStep import MStep
 from corosid.jacobian.em import run_expectation_maximization
 from corosid.jacobian.ml import run_maximum_likelihood
-from corosid.jacobian.pem import run_prediction_error_minimization
+from corosid.jacobian.least_squares import run_prediction_error_minimization
 
 log = logging.getLogger(__name__)
 
