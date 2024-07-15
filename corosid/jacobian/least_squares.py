@@ -15,8 +15,6 @@ from corosid.common.optutil import make_unpacker, pack
 from corosid.common.util import compare
 from corosid.common.util import l1_pairwise_probe_estimator
 from corosid.common.util import today, now
-from corosid.jacobian.config import USE_ADAM, \
-    ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)
@@ -142,11 +140,16 @@ class LeastSquaresIDResult:
     dx_errors: ArrayLike
     z_errors: ArrayLike
 
-def run_least_squares_identification(
+def run_batch_least_squares_id(
         data,
         G0,
-        tol=SCIPY_TOL
+        method='L-BFGS-B',
+        options=None,
+        tol=1e-3
 ):
+    if options is None:
+        options = {'disp': False, 'maxcor': 10, 'maxls': 100}
+
     costs = []
     dz_errors = []
     dx_errors = []
@@ -180,31 +183,23 @@ def run_least_squares_identification(
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}')
         return J, gradient
 
-    if USE_ADAM:
+    if method == 'adam':
         from corosid.common import AdamOptimizer
-        num_iter = ADAM_NUM_ITER
-        adam = AdamOptimizer(cost_for_optimizer, x0=pack(starting_guess), num_iter=num_iter,
-                             alpha=ADAM_ALPHA, beta1=ADAM_BETA1, beta2=0.999, eps=1e-8)
-        Js, x = adam.optimize()
+        adam = AdamOptimizer(cost_for_optimizer, x0=pack(starting_guess),
+                             num_iter=options['num_iter'],
+                             alpha=options['alpha'],
+                             beta1=options['beta1'],
+                             beta2=options['beta2'],
+                             eps=options['eps'])
+        Js, solution = adam.optimize()
 
-        class Result:
-            def __init__(self, x):
-                self.x = x
-
-        res = Result(unpack(x))
-
-    if USE_SCIPY:
+    else:
         res = minimize(cost_for_optimizer, x0=pack(starting_guess), jac=True,
-                       method=SCIPY_METHOD, options=SCIPY_OPT, tol=tol)
-        res_unpacked = unpack(res.x)
-        res.x = {key: np.asarray(res_unpacked[key]) for key in res_unpacked}
-
-    # For each variable: if it is in the list of targets, take the optimized value, otherwise take
-    # the initial value.
-    final_values = {'G': res.x['G']}
+                       method=method, options=options, tol=tol)
+        solution = res.x
 
     result = LeastSquaresIDResult(
-        final_values['G'],
+        unpack(solution)['G'],
         costs=np.array(costs),
         dz_errors=np.array(dz_errors),
         dx_errors=np.array(dx_errors),
