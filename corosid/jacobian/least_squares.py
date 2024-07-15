@@ -80,11 +80,7 @@ class EstimationStep:  # Sort of like an E-step, but using a pairwise probe esti
 @dataclass
 class EstimationResult:
     G: ArrayLike
-    Q: np.float64
-    R: np.float64
-    x0: ArrayLike
-    P0: np.float64
-    likelihoods: ArrayLike
+    costs: ArrayLike
     error: ArrayLike
     x_error: ArrayLike
     z_error: ArrayLike
@@ -159,7 +155,7 @@ def run_prediction_error_minimization(
         G0,
         tol=SCIPY_TOL
 ):
-    likelihoods = []
+    costs = []
     error = []
     x_error = []
     z_error = []
@@ -183,15 +179,13 @@ def run_prediction_error_minimization(
         # performance metrics # error, x_error, and z_error
         estimator.run()
 
-        # J, grads = jax.value_and_grad(transition_error_cost, argnums=(0,))(G, data.Psi, data.us,
-        #                                                                    estimator.xs, data.zs)
+        # J, grads = jax.value_and_grad(least_squares_state_cost, argnums=(0,))(
+        #     G, data.Psi, data.us, estimator.xs, data.zs)
         J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(G, data.Psi, data.us,
                                                                         estimator.xs, data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
 
-        # Dummy: the cost is not a likelihood, but the plotter expects one, so just use -cost
-        likelihoods.append(-J)
-
+        costs.append(J)
         error.append(np.mean(estimator.eval_error(data.zs)))
         x_error.append(estimator.eval_x_err())
         z_error.append(estimator.eval_z_err(data.zs))
@@ -225,15 +219,10 @@ def run_prediction_error_minimization(
     # Pack results into data structure. Several of these are dummy values, such as the Kalman
     # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
     result = EstimationResult(final_values['G'],
-                              Q=1.,     # Dummy value
-                              R=1.,     # Dummy value
-                              x0=None,  # Dummy value
-                              P0=1.,  #
-                              likelihoods=np.array(likelihoods),
+                              costs=np.array(costs),
                               error=np.array(error),
                               x_error=np.array(x_error),
                               z_error=np.array(z_error),
-                              estep=EstimationStep,
-                              mstep=None)
+                              estep=EstimationStep)
 
     return result
