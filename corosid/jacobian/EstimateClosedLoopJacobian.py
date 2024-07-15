@@ -5,8 +5,8 @@ import numpy as np
 from corosid.common import BaseEstimateParameters
 from corosid.common.batch_linalg import batch_mt, batch_mmip, eye
 from corosid.jacobian.MStep import MStep
-from corosid.jacobian.em import run_expectation_maximization
-from corosid.jacobian.ml import run_maximum_likelihood
+from corosid.jacobian.expectation_maximization import run_expectation_maximization
+from corosid.jacobian.maximum_likelihood import run_maximum_likelihood
 from corosid.jacobian.least_squares import run_prediction_error_minimization
 
 log = logging.getLogger(__name__)
