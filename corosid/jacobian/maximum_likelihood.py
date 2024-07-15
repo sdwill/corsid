@@ -11,7 +11,7 @@ from corosid.jacobian.EStep import EStep
 from corosid.jacobian.MStep import MStep, opt_to_cov, cov_to_opt
 from corosid.jacobian.config import USE_ADAM, \
     ADAM_NUM_ITER, ADAM_ALPHA, ADAM_BETA1, USE_SCIPY, SCIPY_METHOD, SCIPY_OPT, SCIPY_TOL
-from corosid.jax import make_unpacker, pack
+from corosid.common.optutil import make_unpacker, pack
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)

@@ -14,7 +14,7 @@ from corosid.common import util
 from corosid.common.util import embed, make_z_from_probe_images, today, now
 from corosid.jacobian import EstimateClosedLoopJacobian
 from corosid.jacobian.least_squares import (EstimationStep, EstimationResult, least_squares_cost)
-from corosid.jax import make_unpacker, pack
+from corosid.common.optutil import make_unpacker, pack
 
 log = logging.getLogger(__name__)
 
