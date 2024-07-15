@@ -43,7 +43,7 @@ ARGNUMS = {
 
 
 @dataclass
-class EstimationResult:
+class SystemIDResult:
     G: ArrayLike
     Q: np.float64
     R: np.float64
@@ -198,15 +198,15 @@ def run_maximum_likelihood(data,
                     for opt_key in initial_values}
 
     # Pack results into data structure. Convert all inverse-variance parameters back to variances.
-    result = EstimationResult(final_values['G'],
-                              opt_to_cov(final_values['qinv']),
-                              opt_to_cov(final_values['rinv']),
-                              final_values['x0'],
-                              opt_to_cov(final_values['p0inv']),
-                              np.array(likelihoods),
-                              np.array(error),
-                              np.array(x_error),
-                              np.array(z_error),
-                              estep, mstep_outer)
+    result = SystemIDResult(final_values['G'],
+                            opt_to_cov(final_values['qinv']),
+                            opt_to_cov(final_values['rinv']),
+                            final_values['x0'],
+                            opt_to_cov(final_values['p0inv']),
+                            np.array(likelihoods),
+                            np.array(error),
+                            np.array(x_error),
+                            np.array(z_error),
+                            estep, mstep_outer)
 
     return result

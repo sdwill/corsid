@@ -40,7 +40,7 @@ ARGNUMS = {
 
 
 @dataclass
-class EstimationResult:
+class SystemIDResult:
     G: ArrayLike
     Q: np.float64
     R: np.float64
@@ -130,15 +130,15 @@ def run_expectation_maximization(data,
 
     # For each variable: if it is in the list of targets, take the optimized value, otherwise take
     # the initial value.
-    result = EstimationResult(current_values['G'],
-                              opt_to_cov(current_values['qinv']),
-                              opt_to_cov(current_values['rinv']),
-                              current_values['x0'],
-                              opt_to_cov(current_values['p0inv']),
-                              np.array(likelihoods),
-                              np.array(error),
-                              np.array(x_error),
-                              np.array(z_error),
-                              estep, mstep)
+    result = SystemIDResult(current_values['G'],
+                            opt_to_cov(current_values['qinv']),
+                            opt_to_cov(current_values['rinv']),
+                            current_values['x0'],
+                            opt_to_cov(current_values['p0inv']),
+                            np.array(likelihoods),
+                            np.array(error),
+                            np.array(x_error),
+                            np.array(z_error),
+                            estep, mstep)
 
     return result

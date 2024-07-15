@@ -75,16 +75,14 @@ class EstimationStep:  # Sort of like an E-step, but using a pairwise probe esti
         return err_per_iter.mean()
 
 
-
 @dataclass
-class EstimationResult:
+class SystemIDResult:
     G: ArrayLike
     costs: ArrayLike
     error: ArrayLike
     x_error: ArrayLike
     z_error: ArrayLike
     estep: EstimationStep
-    mstep: MStep
 
 
 @jax.jit
@@ -217,11 +215,11 @@ def run_least_squares_identification(
 
     # Pack results into data structure. Several of these are dummy values, such as the Kalman
     # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
-    result = EstimationResult(final_values['G'],
-                              costs=np.array(costs),
-                              error=np.array(error),
-                              x_error=np.array(x_error),
-                              z_error=np.array(z_error),
-                              estep=EstimationStep)
+    result = SystemIDResult(final_values['G'],
+                            costs=np.array(costs),
+                            error=np.array(error),
+                            x_error=np.array(x_error),
+                            z_error=np.array(z_error),
+                            estep=EstimationStep)
 
     return result

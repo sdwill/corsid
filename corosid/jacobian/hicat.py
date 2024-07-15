@@ -13,7 +13,7 @@ from corosid.common import AdamOptimizer, TrainingData, batch_linalg as bl
 from corosid.common import util
 from corosid.common.util import embed, make_z_from_probe_images, today, now
 from corosid.jacobian import EstimateClosedLoopJacobian
-from corosid.jacobian.least_squares import (EstimationStep, EstimationResult, least_squares_cost)
+from corosid.jacobian.least_squares import (EstimationStep, SystemIDResult, least_squares_cost)
 from corosid.common.optutil import make_unpacker, pack
 
 log = logging.getLogger(__name__)
@@ -230,7 +230,7 @@ def load_hicat_jacobian(path, dark_zone):
     return G_real[dark_zone.ravel(), :] + 1j * G_imag[dark_zone.ravel(), :]  # (num_pix, num_act)
 
 @dataclass
-class EstimationResult:
+class SystemIDResult:
     G: np.ndarray
     costs: np.ndarray
     error: np.ndarray
@@ -350,12 +350,12 @@ class EstimateOpenLoopHicatJacobian:
 
         # Pack results into data structure. Several of these are dummy values, such as the Kalman
         # filter parameters Q, R, x0 and P0, because this algorithm doesn't use a Kalman filter.
-        result = EstimationResult(final_values['G'],
-                                  costs=np.array(self.costs),
-                                  error=np.array(self.error),
-                                  x_error=np.array(self.x_error),
-                                  z_error=np.array(self.z_error),
-                                  estep=self.estep)
+        result = SystemIDResult(final_values['G'],
+                                costs=np.array(self.costs),
+                                error=np.array(self.error),
+                                x_error=np.array(self.x_error),
+                                z_error=np.array(self.z_error),
+                                estep=self.estep)
 
         return result
 
