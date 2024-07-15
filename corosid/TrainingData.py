@@ -1,6 +1,7 @@
 import numpy as np
 
 class TrainingData:
+    """ Structure for the training data used for system identification """
     def __init__(
             self,
             num_pix: int = None,    # Number of pixels in dark zone

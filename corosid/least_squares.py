@@ -6,11 +6,13 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
+from typing import Dict
 from scipy.optimize import minimize
 from tqdm import tqdm
 
 from corosid import util, batch_linalg as bl, differentiable as d
 from corosid.adam import AdamOptimizer
+from corosid.TrainingData import TrainingData
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)
@@ -137,10 +139,10 @@ class LeastSquaresIDResult:
     z_errors: ArrayLike
 
 def run_batch_least_squares_id(
-        data,
-        G0,
+        data: TrainingData,
+        G0: ArrayLike,
         method='L-BFGS-B',
-        options=None,
+        options: Dict = None,
         tol=1e-3
 ):
     if options is None:
@@ -213,7 +215,7 @@ class StochasticLeastSquaresID:
         self.dx_errors = []
         self.z_errors = []
         self.target_dir = target_dir
-        self.data = None
+        self.data = None  # Set by load_data during run()
 
         # Starting guess for optimizer, containing only the values that we are optimizing
         self.starting_guess = {'G': G0.astype(np.float64)}
@@ -303,7 +305,7 @@ class StochasticLeastSquaresID:
             for batch_index, batch_start in enumerate(batch_starts):
                 log.info(f'Batch {batch_index} of {batch_starts.size}')
                 iters_to_load = range(batch_start, batch_start + batch_size)
-                self.data = load_data(iters_to_load)
+                self.data: TrainingData = load_data(iters_to_load)
                 self.adam.x = x
                 J, x = self.adam.iterate(batch_index)
 
