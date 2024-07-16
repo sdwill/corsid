@@ -264,7 +264,7 @@ class StochasticLeastSquaresID:
 
         # Average over all of the minibatches to get a mean value for this epoch
         dz_errors = np.array(self.dz_errors).reshape(-1, batch_size).mean(axis=1)
-        val_errors = np.array(self.val_error)
+        val_errors = np.array(self.val_errors)
         dx_errors = np.array(self.dx_errors).reshape(-1, batch_size).mean(axis=1)
         z_errors = np.array(self.z_errors).reshape(-1, batch_size).mean(axis=1)
 
@@ -323,7 +323,7 @@ class StochasticLeastSquaresID:
 
             # After each epoch, evaluate error on validation data
             G = self.unpack(x)['G']
-            H = 4 * bl.batch_mt(bl.batch_mmip(G, val_data.Psi))
+            H = 4 * bl.batch_mt(bl.batch_mmip(G, self.val_data.Psi))
             self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.zs))
 
             mean_cost_epoch = np.mean(self.adam.Js)
