@@ -13,8 +13,5 @@ setup(
         'matplotlib',
         'astropy',
         'jax',
-        'svgutils',
-        'svglib',
-        'asdf'
  ]
 )
