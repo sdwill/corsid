@@ -299,8 +299,7 @@ class StochasticLeastSquaresID:
             plt.close(fig)
 
     def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
-            validation_iters,
-            adam_alpha, adam_beta1, adam_beta2, adam_eps):
+            validation_iters, adam_alpha, adam_beta1, adam_beta2, adam_eps):
         batch_starts = np.arange(training_iter_start,
                                  training_iter_start + num_training - batch_size,
                                  batch_size)
@@ -346,6 +345,7 @@ def run_stochastic_least_squares_id(
         training_iter_start,
         batch_size,
         num_epochs,
+        validation_iters,
         adam_alpha,
         adam_beta1,
         adam_beta2,
@@ -354,5 +354,5 @@ def run_stochastic_least_squares_id(
 ):
     system_id = StochasticLeastSquaresID(G0, output_dir=output_dir)
     result = system_id.run(load_data, num_training, batch_size, training_iter_start, num_epochs,
-                           adam_alpha, adam_beta1, adam_beta2, adam_eps)
+                           validation_iters, adam_alpha, adam_beta1, adam_beta2, adam_eps)
     return result
