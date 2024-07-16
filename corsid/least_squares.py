@@ -207,9 +207,11 @@ class StochasticLeastSquaresID:
     def __init__(self, G0, output_dir=None):
         self.costs = []
         self.dz_errors = []
+        self.val_errors = []  # Same as dz_errors, but on validation data
         self.dx_errors = []
         self.z_errors = []
-        self.data = None  # Set by load_data during run()
+        self.data = None  # Training data; set by load_data during run()
+        self.val_data = None  # Validation data; set by load_data during run()
 
         # Starting guess for optimizer, containing only the values that we are optimizing
         self.starting_guess = {'G': G0.astype(np.float64)}
@@ -258,16 +260,23 @@ class StochasticLeastSquaresID:
         return J, gradient
 
     def make_status_plot(self, epoch):
-        dz_errors = np.array(self.dz_errors)
-        dx_errors = np.array(self.dx_errors)
-        z_errors = np.array(self.z_errors)
+        batch_size = len(self.dz_errors) // (epoch+1)
+
+        # Average over all of the minibatches to get a mean value for this epoch
+        dz_errors = np.array(self.dz_errors).reshape(-1, batch_size).mean(axis=1)
+        val_errors = np.array(self.val_error)
+        dx_errors = np.array(self.dx_errors).reshape(-1, batch_size).mean(axis=1)
+        z_errors = np.array(self.z_errors).reshape(-1, batch_size).mean(axis=1)
+
+        epoch_axis = np.arange(epoch+1)
 
         fig, axs = plt.subplots(dpi=150, layout='constrained', ncols=2, figsize=(7, 3))
         ax = axs[0]
-        ax.plot(np.arange(dz_errors.size), 100 * dz_errors, '-', label='Data transition error')
-        ax.plot(np.arange(dx_errors.size), 100 * dx_errors, '-', label='State transition error')
-        ax.plot(np.arange(z_errors.size), 100 * z_errors, '-', label='Data error')
-        ax.set_xlabel('Iteration')
+        ax.plot(epoch_axis, 100 * val_errors, '-', label='Validation error')
+        ax.plot(epoch_axis, 100 * dz_errors, '-', label='Data transition error')
+        ax.plot(epoch_axis, 100 * dx_errors, '-', label='State transition error')
+        ax.plot(epoch_axis, 100 * z_errors, '-', label='Data error')
+        ax.set_xlabel('Epoch')
         ax.set_ylabel('Error [%]')
 
         # Scale the y-axis limits to the largest starting error metric, so that the limits don't
@@ -290,9 +299,13 @@ class StochasticLeastSquaresID:
             plt.close(fig)
 
     def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
+            validation_iters,
             adam_alpha, adam_beta1, adam_beta2, adam_eps):
-        batch_starts = np.arange(training_iter_start, num_training - batch_size, batch_size)
+        batch_starts = np.arange(training_iter_start,
+                                 training_iter_start + num_training - batch_size,
+                                 batch_size)
         x = util.pack(self.starting_guess)
+        self.val_data = load_data(validation_iters)
 
         for epoch in range(num_epochs):
             log.info(f'Epoch {epoch}')
@@ -308,6 +321,11 @@ class StochasticLeastSquaresID:
                 self.data: TrainingData = load_data(iters_to_load)
                 self.adam.x = x
                 J, x = self.adam.iterate(batch_index)
+
+            # After each epoch, evaluate error on validation data
+            G = self.unpack(x)['G']
+            H = 4 * bl.batch_mt(bl.batch_mmip(G, val_data.Psi))
+            self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.zs))
 
             mean_cost_epoch = np.mean(self.adam.Js)
             self.costs.append(mean_cost_epoch)
