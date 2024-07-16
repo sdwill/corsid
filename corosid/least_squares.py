@@ -204,12 +204,11 @@ class StochasticLeastSquaresID:
     """
     Estimate Jacobian using a least-squares cost function and stochastic optimization (with Adam).
     """
-    def __init__(self, output_dir, G0):
+    def __init__(self, G0, output_dir=None):
         self.costs = []
         self.dz_errors = []
         self.dx_errors = []
         self.z_errors = []
-        self.target_dir = target_dir
         self.data = None  # Set by load_data during run()
 
         # Starting guess for optimizer, containing only the values that we are optimizing
@@ -217,13 +216,18 @@ class StochasticLeastSquaresID:
         self.unpack = util.make_unpacker(self.starting_guess)
         self.adam = None
 
-        self.output_dir = output_dir / f'{util.today()}_{util.now()}_systemid'
-        self.output_dir.mkdir(exist_ok=True, parents=True)
-        logging.getLogger().addHandler(
-            logging.FileHandler(self.output_dir / 'output.log')
-        )
-        self.status_dir = self.output_dir / 'status'
-        self.status_dir.mkdir(exist_ok=True)
+        # Directory for storing status plots (and to save resulting Jacobian if desired)
+        self.output_dir = None
+        self.status_dir = None
+
+        if output_dir is not None:
+            self.output_dir = output_dir / f'{util.today()}_{util.now()}_systemid'
+            self.output_dir.mkdir(exist_ok=True, parents=True)
+            logging.getLogger().addHandler(
+                logging.FileHandler(self.output_dir / 'output.log')
+            )
+            self.status_dir = self.output_dir / 'status'
+            self.status_dir.mkdir(exist_ok=True)
 
     def estimate_states(self, sol: dict):
         G = sol['G']
@@ -281,8 +285,9 @@ class StochasticLeastSquaresID:
         ax.set_title(r'Cost vs. training epoch')
         ax.grid(True, linewidth=0.5, linestyle='dotted')
 
-        fig.savefig(self.status_dir / f'epoch_{epoch:03d}')
-        plt.close(fig)
+        if self.status_dir is not None:
+            fig.savefig(self.status_dir / f'epoch_{epoch:03d}')
+            plt.close(fig)
 
     def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
             adam_alpha, adam_beta1, adam_beta2, adam_eps):
@@ -326,9 +331,10 @@ def run_stochastic_least_squares_id(
         adam_alpha,
         adam_beta1,
         adam_beta2,
-        adam_eps
+        adam_eps,
+        output_dir=None
 ):
-    system_id = StochasticLeastSquaresID(target_dir, output_dir, G0)
+    system_id = StochasticLeastSquaresID(G0, output_dir=output_dir)
     result = system_id.run(load_data, num_training, batch_size, training_iter_start, num_epochs,
                            adam_alpha, adam_beta1, adam_beta2, adam_eps)
     return result

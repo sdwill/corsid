@@ -118,9 +118,10 @@ def load_data(iters_to_load):
     us_to_load = {}
 
     iters_to_load = list(iters_to_load)
+    start = iters_to_load[0]
     for k in iters_to_load:
-        zs_to_load[k] = zs[k]
-        us_to_load[k] = us[k]
+        zs_to_load[k-start] = zs[k]
+        us_to_load[k-start] = us[k]
 
     return TrainingData(
         num_pix=num_pix,
@@ -133,3 +134,19 @@ def load_data(iters_to_load):
         Psi=Psi
     )
 
+result = ls.run_stochastic_least_squares_id(
+    G0, load_data,
+    num_training=num_iter,
+    training_iter_start=1,
+    batch_size=4,
+    num_epochs=20,
+    adam_alpha=5e-2,
+    adam_beta1=0.9,
+    adam_beta2=0.999,
+    adam_eps=1e-8,
+    output_dir=None
+)
+
+#%%
+import matplotlib.pyplot as plt
+plt.show()
