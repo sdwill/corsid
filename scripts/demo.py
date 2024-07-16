@@ -1,5 +1,5 @@
 import numpy as np
-import corosid.batch_linalg as bl
+import corsid.batch_linalg as bl
 from scipy.linalg import hadamard
 
 num_pix = 10  # Number of focal-plane pixels
@@ -18,7 +18,7 @@ H0 = 4*bl.batch_mt(bl.batch_mmip(G, Psi0))  # Pairwise observation matrix: 4(G*P
 
 def optimize_probes():
     from scipy.optimize import minimize
-    from corosid import differentiable as d
+    from corsid import differentiable as d
     import jax.numpy as jnp
     import jax
 
@@ -63,7 +63,7 @@ def simulate_data():
     return xs, us, zs
 
 #%%
-from corosid.TrainingData import TrainingData
+from corsid.TrainingData import TrainingData
 
 xs, us, zs = simulate_data()
 full_data = TrainingData(
@@ -78,7 +78,7 @@ full_data = TrainingData(
 )
 
 #%% Run batch optimization
-import corosid.least_squares as ls
+import corsid.least_squares as ls
 
 G0 = G + np.random.randn(*G.shape)*0.5  # Simulate imperfect starting knowledge
 
@@ -91,7 +91,7 @@ result = ls.run_batch_least_squares_id(
 )
 
 #%%
-from corosid.util import compare
+from corsid.util import compare
 
 G_id = result.G
 H_id = 4*bl.batch_mt(bl.batch_mmip(G_id, Psi))

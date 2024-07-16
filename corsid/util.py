@@ -7,7 +7,7 @@ from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numpy.typing import NDArray
 
-import corosid.batch_linalg as bl
+import corsid.batch_linalg as bl
 
 
 def today():

@@ -1,4 +1,4 @@
-name: corosid
+name: corsid
 channels:
   - conda-forge
   - defaults

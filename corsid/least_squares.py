@@ -10,9 +10,9 @@ from typing import Dict
 from scipy.optimize import minimize
 from tqdm import tqdm
 
-from corosid import util, batch_linalg as bl, differentiable as d
-from corosid.adam import AdamOptimizer
-from corosid.TrainingData import TrainingData
+from corsid import util, batch_linalg as bl, differentiable as d
+from corsid.adam import AdamOptimizer
+from corsid.TrainingData import TrainingData
 
 log = logging.getLogger(__name__)
 jax.config.update('jax_enable_x64', True)

@@ -1,6 +1,6 @@
 """
 A collection of linear algebra operations that operate on the last N-1 operations of N-dimensional
-numpy arrays. See corosid.jax.differentiable for the jax-based versions of these.
+numpy arrays. See corsid.differentiable for the jax-based versions of these.
 """
 import numpy as np
 

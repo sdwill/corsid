@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='corosid',
+    name='corsid',
     version='0.1',
     description='System identification algorithms for space-based exoplanet coronagraphy',
     author='Scott Will',
