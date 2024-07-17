@@ -1,5 +1,5 @@
 """
-A collection of linear algebra operations that operate on the last N-1 operations of N-dimensional
+A collection of linear algebra operations that operate on the last N-1 dimensions of N-dimensional
 numpy arrays. See corsid.differentiable for the jax-based versions of these.
 """
 import numpy as np
