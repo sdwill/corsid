@@ -104,8 +104,7 @@ def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict,
 def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
     """
     Compute the error between the predicted changes in observations, H*G*u[k], and the actual
-    changes in observations, z[k] - z[k-1]. This is similar to transition error, but mapping all
-    quantities into the observable domain.
+    changes in observations, z[k] - z[k-1].
     """
     G = G.astype(jnp.float64)
     H = 4 * d.batch_mt(d.batch_mmip(G, Psi))
@@ -116,7 +115,7 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
 
     for k in range(1, num_iter):
         dz = zs[k] - zs[k-1]
-        # Note: u casted to float to avoid Jax overflow bug
+        # Note: cast u to float to avoid Jax overflow bug
         dz_pred = d.batch_mvip(H, d.batch_mvip(G, us[k].astype(np.float64)))
         dzerr = dz_pred - dz
         err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr) / d.batch_vvip(dz, dz))
@@ -158,15 +157,14 @@ def run_batch_least_squares_id(
         G = sol['G']
         H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
 
-        # For least-squares minimization (HGu - dz), this is only necessary for evaluating the
-        # performance metrics error, x_error, and z_error
-        xs = estimate_states(H, data.zs)
-
         # J, grads = jax.value_and_grad(least_squares_state_cost, argnums=(0,))(
         #     G, data.Psi, data.us, estimator.xs, data.zs)
         J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(
             G, data.Psi, data.us, data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
+
+        # Evaluate quality-of-fit metrics
+        xs = estimate_states(H, data.zs)
 
         costs.append(J)
         z_errors.append(eval_z_error(H, xs, data.zs))
