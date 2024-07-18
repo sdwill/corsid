@@ -112,16 +112,21 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
     num_pix = zs[0].shape[0]
 
     err = jnp.zeros((num_pix, num_iter - 1))
+    dztot = 0.
 
     for k in range(1, num_iter):
         dz = zs[k] - zs[k-1]
-        # Note: cast u to float to avoid Jax overflow bug
-        dz_pred = d.batch_mvip(H, d.batch_mvip(G, us[k].astype(np.float64)))
+        dztot = dztot + d.batch_vvip(dz, dz)
+        # uu = d.batch_vvip(us[k], us[k])
+
+        Gu = d.batch_mvip(G, us[k].astype(jnp.float64))  # Cast u to float to avoid Jax overflow bug
+        dz_pred = d.batch_mvip(H, Gu)
         dzerr = dz_pred - dz
-        err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr) / d.batch_vvip(dz, dz))
+        err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr))
 
     # Motivation of dztot: scale the cost function so that it's invariant to the contrast level
-    J = err.mean()
+    dztot = (dztot / (num_iter - 1)).mean()
+    J = err.mean() / dztot
     return J
 
 @dataclass
