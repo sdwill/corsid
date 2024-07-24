@@ -341,6 +341,150 @@ class StochasticLeastSquaresID:
 
         return result
 
+class StochasticPairwiseLeastSquaresID:
+    """
+    Estimate Jacobian using a least-squares cost function and stochastic optimization (with Adam).
+    Training iterations are organized in an alternating pairwise dither setup.
+    """
+    def __init__(self, G0, output_dir=None):
+        self.costs = []
+        self.dz_errors = []
+        self.val_errors = []  # Same as dz_errors, but on validation data
+        self.dx_errors = []
+        self.z_errors = []
+        self.pos_data = None  # positive pairwise data
+        self.neg_data = None  # negative pairwise data
+        self.diff_data = None  # differenced pairwise data (pos - neg)
+        self.val_data = None  # Validation data; set by load_data during run()
+
+        # Starting guess for optimizer, containing only the values that we are optimizing
+        self.starting_guess = {'G': G0.astype(np.float64)}
+        self.unpack = util.make_unpacker(self.starting_guess)
+        self.adam = None
+
+        # Directory for storing status plots (and to save resulting Jacobian if desired)
+        self.output_dir = None
+        self.status_dir = None
+
+        if output_dir is not None:
+            self.output_dir = output_dir / f'{util.today()}_{util.now()}_systemid'
+            self.output_dir.mkdir(exist_ok=True, parents=True)
+            logging.getLogger().addHandler(
+                logging.FileHandler(self.output_dir / 'output.log')
+            )
+            self.status_dir = self.output_dir / 'status'
+            self.status_dir.mkdir(exist_ok=True)
+
+    def estimate_states(self, sol: dict):
+        G = sol['G']
+        H = 4 * bl.batch_mt(bl.batch_mmip(G, self.diff_data.Psi))
+
+        # This is only necessary for evaluating the performance metrics (error, x_error, z_error)
+        xs = estimate_states(H, self.diff_data.zs)
+        self.dz_errors.append(eval_dz_error(G, H, self.diff_data.us, self.diff_data.zs))
+        self.dx_errors.append(eval_dx_error(G, xs, self.diff_data.us))
+        self.z_errors.append(eval_z_error(H, xs, self.diff_data.zs))
+
+    def cost_for_optimizer(self, x: np.ndarray):
+        """
+        The actual cost function passed to the optimizer. Accepts a single real-valued vector, x,
+        and returns the value of the cost function, J, as well as its derivative with respect to x,
+        dJ/dx.
+        """
+        sol = self.unpack(x)
+        self.estimate_states(sol)
+        forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
+        J, grads = forward_and_gradient(sol['G'],
+                                        self.diff_data.Psi,
+                                        self.diff_data.us,
+                                        self.diff_data.zs)
+        gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
+        log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
+                 f'dz_err = {self.dz_errors[-1]:0.3e}')
+        return J, gradient
+
+    def make_status_plot(self, epoch):
+        batch_size = len(self.dz_errors) // (epoch+1)
+
+        # Average over all of the minibatches to get a mean value for this epoch
+        dz_errors = np.array(self.dz_errors).reshape(-1, batch_size).mean(axis=1)
+        val_errors = np.array(self.val_errors)
+        dx_errors = np.array(self.dx_errors).reshape(-1, batch_size).mean(axis=1)
+        z_errors = np.array(self.z_errors).reshape(-1, batch_size).mean(axis=1)
+
+        epoch_axis = np.arange(epoch+1)
+
+        fig, axs = plt.subplots(dpi=150, layout='constrained', ncols=2, figsize=(7, 3))
+        ax = axs[0]
+        ax.plot(epoch_axis, 100 * val_errors, '-', label='Validation error')
+        ax.plot(epoch_axis, 100 * dz_errors, '-', label='Data transition error')
+        ax.plot(epoch_axis, 100 * dx_errors, '-', label='State transition error')
+        ax.plot(epoch_axis, 100 * z_errors, '-', label='Data error')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Error [%]')
+
+        # Scale the y-axis limits to the largest starting error metric, so that the limits don't
+        # change when L-BFGS has a hiccup iteration that causes a temporarily huge error value.
+        ax.set_ylim([-5, 105 * np.max([dz_errors[0], dx_errors[0], z_errors[0]])])
+        ax.set_title('Convergence', weight='bold')
+        ax.grid(True, linewidth=0.5, linestyle='dotted')
+        ax.legend(loc='best')
+
+        ax = axs[1]
+        ax.plot(np.arange(len(self.costs)), self.costs, 'o-')
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Cost')
+
+        ax.set_title(r'Cost vs. training epoch')
+        ax.grid(True, linewidth=0.5, linestyle='dotted')
+
+        if self.status_dir is not None:
+            fig.savefig(self.status_dir / f'epoch_{epoch:03d}')
+            plt.close(fig)
+
+    def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
+            validation_iters, adam_alpha, adam_beta1, adam_beta2, adam_eps):
+        batch_starts = np.arange(training_iter_start,
+                                 training_iter_start + num_training - batch_size,
+                                 batch_size)
+        x = util.pack(self.starting_guess)
+        self.val_data = load_data(validation_iters)
+
+        for epoch in range(num_epochs):
+            log.info(f'Epoch {epoch}')
+            np.random.shuffle(batch_starts)
+            self.adam = AdamOptimizer(
+                self.cost_for_optimizer, x, num_iter=len(batch_starts),
+                alpha=adam_alpha,
+                beta1=adam_beta1, beta2=adam_beta2, eps=adam_eps)
+
+            for batch_index, batch_start in enumerate(batch_starts):
+                log.info(f'Batch {batch_index} of {batch_starts.size}')
+                pos_iters_to_load = range(batch_start, batch_start + batch_size, 2)
+                neg_iters_to_load = range(batch_start + 1, batch_start + batch_size, 2)
+                self.pos_data: TrainingData = load_data(pos_iters_to_load)
+                self.neg_data: TrainingData = load_data(neg_iters_to_load)
+                self.diff_data = self.pos_data - self.neg_data
+                self.adam.x = x
+                J, x = self.adam.iterate(batch_index)
+
+            # After each epoch, evaluate error on validation data
+            G = self.unpack(x)['G']
+            H = 4 * bl.batch_mt(bl.batch_mmip(G, self.val_data.Psi))
+            self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.zs))
+
+            mean_cost_epoch = np.mean(self.adam.Js)
+            self.costs.append(mean_cost_epoch)
+            self.make_status_plot(epoch)
+
+        result = LeastSquaresIDResult(self.unpack(x)['G'],
+                                      costs=np.array(self.costs),
+                                      dz_errors=np.array(self.dz_errors),
+                                      dx_errors=np.array(self.dx_errors),
+                                      z_errors=np.array(self.z_errors))
+
+        return result
+
 def run_stochastic_least_squares_id(
         G0,
         load_data,
