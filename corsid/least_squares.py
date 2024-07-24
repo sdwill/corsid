@@ -464,7 +464,8 @@ class StochasticPairwiseLeastSquaresID:
                 neg_iters_to_load = range(batch_start + 1, batch_start + batch_size, 2)
                 self.pos_data: TrainingData = load_data(pos_iters_to_load)
                 self.neg_data: TrainingData = load_data(neg_iters_to_load)
-                self.diff_data = self.pos_data - self.neg_data
+                self.diff_data: TrainingData = load_data(pos_iters_to_load)
+                self.diff_data.us = self.pos_data.us - self.neg_data.us
                 self.adam.x = x
                 J, x = self.adam.iterate(batch_index)
 
