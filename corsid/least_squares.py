@@ -352,9 +352,7 @@ class StochasticPairwiseLeastSquaresID:
         self.val_errors = []  # Same as dz_errors, but on validation data
         self.dx_errors = []
         self.z_errors = []
-        self.pos_data = None  # positive pairwise data
-        self.neg_data = None  # negative pairwise data
-        self.diff_data = None  # differenced pairwise data (pos - neg)
+        self.data = None  # differenced pairwise data (pos - neg)
         self.val_data = None  # Validation data; set by load_data during run()
 
         # Starting guess for optimizer, containing only the values that we are optimizing
@@ -377,13 +375,13 @@ class StochasticPairwiseLeastSquaresID:
 
     def estimate_states(self, sol: dict):
         G = sol['G']
-        H = 4 * bl.batch_mt(bl.batch_mmip(G, self.diff_data.Psi))
+        H = 4 * bl.batch_mt(bl.batch_mmip(G, self.data.Psi))
 
         # This is only necessary for evaluating the performance metrics (error, x_error, z_error)
-        xs = estimate_states(H, self.diff_data.zs)
-        self.dz_errors.append(eval_dz_error(G, H, self.diff_data.us, self.diff_data.zs))
-        self.dx_errors.append(eval_dx_error(G, xs, self.diff_data.us))
-        self.z_errors.append(eval_z_error(H, xs, self.diff_data.zs))
+        xs = estimate_states(H, self.data.zs)
+        self.dz_errors.append(eval_dz_error(G, H, self.data.us, self.data.zs))
+        self.dx_errors.append(eval_dx_error(G, xs, self.data.us))
+        self.z_errors.append(eval_z_error(H, xs, self.data.zs))
 
     def cost_for_optimizer(self, x: np.ndarray):
         """
@@ -395,9 +393,9 @@ class StochasticPairwiseLeastSquaresID:
         self.estimate_states(sol)
         forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
         J, grads = forward_and_gradient(sol['G'],
-                                        self.diff_data.Psi,
-                                        self.diff_data.us,
-                                        self.diff_data.zs)
+                                        self.data.Psi,
+                                        self.data.us,
+                                        self.data.zs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
                  f'dz_err = {self.dz_errors[-1]:0.3e}')
@@ -462,10 +460,7 @@ class StochasticPairwiseLeastSquaresID:
                 log.info(f'Batch {batch_index} of {batch_starts.size}')
                 pos_iters_to_load = range(batch_start, batch_start + batch_size, 2)
                 neg_iters_to_load = range(batch_start + 1, batch_start + batch_size, 2)
-                self.pos_data: TrainingData = load_data(pos_iters_to_load)
-                self.neg_data: TrainingData = load_data(neg_iters_to_load)
-                self.diff_data: TrainingData = load_data(pos_iters_to_load)
-                self.diff_data.us = self.pos_data.us - self.neg_data.us
+                self.data: TrainingData = load_data(pos_iters_to_load)
                 self.adam.x = x
                 J, x = self.adam.iterate(batch_index)
 
