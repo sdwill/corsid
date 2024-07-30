@@ -65,15 +65,19 @@ print(f'Mean condition number after optimization: {np.linalg.cond(H).mean():0.2f
 def simulate_data():
     x0 = np.zeros((num_pix, len_x))
 
-    # Excite the system with Hadamard modes
-    # us = hadamard(len_u)
-    # us = {k: us[:, k] for k in range(len_u)}
-
     us = {}
     xs = {-1: x0}
-    zs = {-1: bl.batch_mvip(H, xs[-1])}
+    zs = {-1: bl.batch_mvip(H, x0)}
+
+    # Excite the system with Hadamard modes
+    cmds = hadamard(2**np.ceil(np.log2(num_iter)))
+    cmds = {k: cmds[:, k][:len_u] for k in range(num_iter)}
+    # cmds = {k: np.random.randn(len_u) for k in range(num_iter)}
+
+    cmds[-1] = np.zeros(len_u)
+
     for k in range(num_iter):
-        us[k] = np.random.randn(len_u)
+        us[k] = cmds[k] - cmds[k-1]
         xs[k] = xs[k-1] + bl.batch_mvip(G, us[k]) + np.sqrt(Q) * np.random.randn(num_pix, len_x)
         zs[k] = bl.batch_mvip(H, xs[k]) + np.sqrt(R) * np.random.randn(num_pix, len_z)
 
