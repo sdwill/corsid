@@ -30,27 +30,27 @@ def estimate_states(H, zs):
 def eval_z_error(H, xs, zs):
     """ Evaluate the error between H*x[k] and z[k] in each time step """
     num_iter = len(list(zs.keys()))
-    z_err_per_iter = np.zeros(num_iter)
+    z_err = 0.
     for k in range(num_iter):
-        z_err_per_iter[k] = util.compare(bl.batch_mvip(H, xs[k]), zs[k])
+        z_err += util.compare(bl.batch_mvip(H, xs[k]), zs[k])
 
-    return z_err_per_iter.mean()
+    return z_err / num_iter
 
-def eval_dx_error(G, xs, us):
+def eval_dx_error(G, dxs, us):
     """
-    Evaluate the error between G*u[k] and x[k] - x[k-1] in each time step.
+    Evaluate the error between G*u[k] and dx[k] in each time step.
     This measures the consistency between the Jacobian, G, and the estimated state history.
     """
-    num_iter = len(list(xs.keys()))
-    dx_err_per_iter = np.zeros(num_iter - 1)
-    for k in range(1, num_iter):
-        dx_err_per_iter[k-1] = util.compare(bl.batch_mvip(G, us[k]), xs[k] - xs[k - 1])
+    num_iter = len(list(dxs.keys()))
+    dx_err = 0.
+    for k in range(num_iter):
+        dx_err += util.compare(bl.batch_mvip(G, us[k]), dxs[k])
 
-    return dx_err_per_iter.mean()
+    return dx_err / num_iter
 
-def eval_dz_error(G, H, us, zs):
+def eval_dz_error(G, H, us, dzs):
     """
-    Evaluatate the error between H*G*u[k] and z[k] - z[k-1] in each time step; i.e., the change
+    Evaluatate the error between H*G*u[k] and dz[k] in each time step; i.e., the change
     in pairwise probe data predicted by the Jacobian.
 
     Derivation from state-space model:
@@ -60,21 +60,22 @@ def eval_dz_error(G, H, us, zs):
              = z[k-1] + H*G*u[k] + noise
      => z[k] - z[k-1] = H*G*u[k] + noise
     """
-    num_iter = len(list(zs.keys()))
-    dz_err_per_iter = np.zeros(num_iter - 1)
+    num_iter = len(list(dzs.keys()))
+    dz_err = 0.
 
-    for k in range(1, num_iter):
-        dz = zs[k] - zs[k-1]
-        dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, us[k]))
-        dz_err_per_iter[k-1] = util.compare(dz_pred, dz)
+    for k in range(num_iter):
+        dz = dzs[k]
+        u = us[k]
+        dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, u))
+        dz_err += util.compare(dz_pred, dz)
 
-    return dz_err_per_iter.mean()
+    return dz_err / num_iter
 
 @jax.jit
-def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict, zs: dict):
+def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, dxs: dict, dzs: dict):
     """
     Compute the error between the predicted state changes, G*u[k], and actual state changes,
-    x[k] - x[k-1], summed over all states.
+    dx[k], summed over all time steps.
 
     The cost from each iteration has an extra factor 1/(u[k] @ u[k]) that mimics the effect of
     modeling the uncertainty in the state change as being from Jacobian errors alone. With a Kalman
@@ -82,51 +83,47 @@ def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, xs: dict,
     the 1/(u[k] @ u[k]) factor appearing in the cost.
     """
     G = G.astype(jnp.float64)
-    num_iter = len(zs.keys())
-    num_pix = xs[0].shape[0]
+    num_iter = len(dzs.keys())
+    num_pix = dxs[0].shape[0]
 
-    err = jnp.zeros((num_pix, num_iter - 1))
-    # dxtot = 0.
+    err = jnp.zeros(num_pix)
 
     for k in range(1, num_iter):
-        dx = xs[k] - xs[k-1]
+        dx = dxs[k]
         # dxtot += bl.batch_vvip(dx, dx)
-        Gu = d.batch_mvip(G, us[k].astype(jnp.float64))  # Cast u to float to avoid Jax overflow bug
-        uu = d.batch_vvip(us[k], us[k])
+        u = us[k].astype(jnp.float64)  # Cast to float to avoid Jax overflow bug
+        Gu = d.batch_mvip(G, u)
+        uu = d.batch_vvip(u, u)
         xerr = Gu - dx
-        err = err.at[:, k-1].set(d.batch_vvip(xerr, xerr) / uu)
+        err = err + d.batch_vvip(xerr, xerr) / uu
 
     # dxtot = (dxtot / (num_iter - 1)).mean()
     J = err.mean()
     return J
 
 @jax.jit
-def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, zs: dict):
+def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, dzs: dict):
     """
     Compute the error between the predicted changes in observations, H*G*u[k], and the actual
-    changes in observations, z[k] - z[k-1].
+    changes in observations, dz[k].
     """
     G = G.astype(jnp.float64)
     H = 4 * d.batch_mt(d.batch_mmip(G, Psi))
-    num_iter = len(zs.keys())
-    num_pix = zs[0].shape[0]
+    num_iter = len(dzs.keys())
+    num_pix = dzs[0].shape[0]
 
-    err = jnp.zeros((num_pix, num_iter - 1))
-    dztot = 0.
+    err = jnp.zeros(num_pix)
+    dztot = jnp.zeros(num_pix)  # To scale the cost function to be invariant to contrast level
 
-    for k in range(1, num_iter):
-        dz = zs[k] - zs[k-1]
-        dztot = dztot + d.batch_vvip(dz, dz)
-        # uu = d.batch_vvip(us[k], us[k])
-
-        Gu = d.batch_mvip(G, us[k].astype(jnp.float64))  # Cast u to float to avoid Jax overflow bug
-        dz_pred = d.batch_mvip(H, Gu)
+    for k in range(num_iter):
+        dz = dzs[k]
+        u = us[k].astype(jnp.float64)  # Cast to float to avoid Jax overflow bug
+        dz_pred = d.batch_mvip(H, d.batch_mvip(G, u))
         dzerr = dz_pred - dz
-        err = err.at[:, k-1].set(d.batch_vvip(dzerr, dzerr))
+        err = err + d.batch_vvip(dzerr, dzerr)
+        dztot = dztot + d.batch_vvip(dz, dz)
 
-    # Motivation of dztot: scale the cost function so that it's invariant to the contrast level
-    dztot = (dztot / (num_iter - 1)).mean()
-    J = err.mean() / dztot
+    J = err.mean() / dztot.mean()
     return J
 
 @dataclass
@@ -165,16 +162,16 @@ def run_batch_least_squares_id(
         # J, grads = jax.value_and_grad(least_squares_state_cost, argnums=(0,))(
         #     G, data.Psi, data.us, estimator.xs, data.zs)
         J, grads = jax.value_and_grad(least_squares_cost, argnums=(0,))(
-            G, data.Psi, data.us, data.zs)
+            G, data.Psi, data.us, data.dzs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
 
         # Evaluate quality-of-fit metrics
-        xs = estimate_states(H, data.zs)
+        dxs = estimate_states(H, data.dzs)
 
         costs.append(J)
-        z_errors.append(eval_z_error(H, xs, data.zs))
-        dx_errors.append(eval_dx_error(G, xs, data.us))
-        dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
+        z_errors.append(eval_z_error(H, dxs, data.dzs))
+        dx_errors.append(eval_dx_error(G, dxs, data.us))
+        dz_errors.append(eval_dz_error(G, H, data.us, data.dzs))
 
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}')
         return J, gradient
@@ -239,10 +236,10 @@ class StochasticLeastSquaresID:
         H = 4 * bl.batch_mt(bl.batch_mmip(G, self.data.Psi))
 
         # This is only necessary for evaluating the performance metrics (error, x_error, z_error)
-        xs = estimate_states(H, self.data.zs)
-        self.dz_errors.append(eval_dz_error(G, H, self.data.us, self.data.zs))
-        self.dx_errors.append(eval_dx_error(G, xs, self.data.us))
-        self.z_errors.append(eval_z_error(H, xs, self.data.zs))
+        dxs = estimate_states(H, self.data.dzs)
+        self.dz_errors.append(eval_dz_error(G, H, self.data.us, self.data.dzs))
+        self.dx_errors.append(eval_dx_error(G, dxs, self.data.us))
+        self.z_errors.append(eval_z_error(H, dxs, self.data.dzs))
 
     def cost_for_optimizer(self, x: np.ndarray):
         """
@@ -256,7 +253,7 @@ class StochasticLeastSquaresID:
         J, grads = forward_and_gradient(sol['G'],
                                         self.data.Psi,
                                         self.data.us,
-                                        self.data.zs)
+                                        self.data.dzs)
         gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
                  f'dz_err = {self.dz_errors[-1]:0.3e}')
@@ -327,147 +324,7 @@ class StochasticLeastSquaresID:
             # After each epoch, evaluate error on validation data
             G = self.unpack(x)['G']
             H = 4 * bl.batch_mt(bl.batch_mmip(G, self.val_data.Psi))
-            self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.zs))
-
-            mean_cost_epoch = np.mean(self.adam.Js)
-            self.costs.append(mean_cost_epoch)
-            self.make_status_plot(epoch)
-
-        result = LeastSquaresIDResult(self.unpack(x)['G'],
-                                      costs=np.array(self.costs),
-                                      dz_errors=np.array(self.dz_errors),
-                                      dx_errors=np.array(self.dx_errors),
-                                      z_errors=np.array(self.z_errors))
-
-        return result
-
-class StochasticPairwiseLeastSquaresID:
-    """
-    Estimate Jacobian using a least-squares cost function and stochastic optimization (with Adam).
-    Training iterations are organized in an alternating pairwise dither setup.
-    """
-    def __init__(self, G0, output_dir=None):
-        self.costs = []
-        self.dz_errors = []
-        self.val_errors = []  # Same as dz_errors, but on validation data
-        self.dx_errors = []
-        self.z_errors = []
-        self.data = None  # differenced pairwise data (pos - neg)
-        self.val_data = None  # Validation data; set by load_data during run()
-
-        # Starting guess for optimizer, containing only the values that we are optimizing
-        self.starting_guess = {'G': G0.astype(np.float64)}
-        self.unpack = util.make_unpacker(self.starting_guess)
-        self.adam = None
-
-        # Directory for storing status plots (and to save resulting Jacobian if desired)
-        self.output_dir = None
-        self.status_dir = None
-
-        if output_dir is not None:
-            self.output_dir = output_dir / f'{util.today()}_{util.now()}_systemid'
-            self.output_dir.mkdir(exist_ok=True, parents=True)
-            logging.getLogger().addHandler(
-                logging.FileHandler(self.output_dir / 'output.log')
-            )
-            self.status_dir = self.output_dir / 'status'
-            self.status_dir.mkdir(exist_ok=True)
-
-    def estimate_states(self, sol: dict):
-        G = sol['G']
-        H = 4 * bl.batch_mt(bl.batch_mmip(G, self.data.Psi))
-
-        # This is only necessary for evaluating the performance metrics (error, x_error, z_error)
-        xs = estimate_states(H, self.data.zs)
-        self.dz_errors.append(eval_dz_error(G, H, self.data.us, self.data.zs))
-        self.dx_errors.append(eval_dx_error(G, xs, self.data.us))
-        self.z_errors.append(eval_z_error(H, xs, self.data.zs))
-
-    def cost_for_optimizer(self, x: np.ndarray):
-        """
-        The actual cost function passed to the optimizer. Accepts a single real-valued vector, x,
-        and returns the value of the cost function, J, as well as its derivative with respect to x,
-        dJ/dx.
-        """
-        sol = self.unpack(x)
-        self.estimate_states(sol)
-        forward_and_gradient = jax.value_and_grad(least_squares_cost, argnums=(0,))
-        J, grads = forward_and_gradient(sol['G'],
-                                        self.data.Psi,
-                                        self.data.us,
-                                        self.data.zs)
-        gradient = np.concatenate([np.array(grad).ravel() for grad in grads])
-        log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}\t '
-                 f'dz_err = {self.dz_errors[-1]:0.3e}')
-        return J, gradient
-
-    def make_status_plot(self, epoch):
-        batch_size = len(self.dz_errors) // (epoch+1)
-
-        # Average over all of the minibatches to get a mean value for this epoch
-        dz_errors = np.array(self.dz_errors).reshape(-1, batch_size).mean(axis=1)
-        val_errors = np.array(self.val_errors)
-        dx_errors = np.array(self.dx_errors).reshape(-1, batch_size).mean(axis=1)
-        z_errors = np.array(self.z_errors).reshape(-1, batch_size).mean(axis=1)
-
-        epoch_axis = np.arange(epoch+1)
-
-        fig, axs = plt.subplots(dpi=150, layout='constrained', ncols=2, figsize=(7, 3))
-        ax = axs[0]
-        ax.plot(epoch_axis, 100 * val_errors, '-', label='Validation error')
-        ax.plot(epoch_axis, 100 * dz_errors, '-', label='Data transition error')
-        ax.plot(epoch_axis, 100 * dx_errors, '-', label='State transition error')
-        ax.plot(epoch_axis, 100 * z_errors, '-', label='Data error')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Error [%]')
-
-        # Scale the y-axis limits to the largest starting error metric, so that the limits don't
-        # change when L-BFGS has a hiccup iteration that causes a temporarily huge error value.
-        ax.set_ylim([-5, 105 * np.max([dz_errors[0], dx_errors[0], z_errors[0]])])
-        ax.set_title('Convergence', weight='bold')
-        ax.grid(True, linewidth=0.5, linestyle='dotted')
-        ax.legend(loc='best')
-
-        ax = axs[1]
-        ax.plot(np.arange(len(self.costs)), self.costs, 'o-')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel('Cost')
-
-        ax.set_title(r'Cost vs. training epoch')
-        ax.grid(True, linewidth=0.5, linestyle='dotted')
-
-        if self.status_dir is not None:
-            fig.savefig(self.status_dir / f'epoch_{epoch:03d}')
-            plt.close(fig)
-
-    def run(self, load_data, num_training, batch_size, training_iter_start, num_epochs,
-            validation_iters, adam_alpha, adam_beta1, adam_beta2, adam_eps):
-        batch_starts = np.arange(training_iter_start,
-                                 training_iter_start + num_training - batch_size,
-                                 batch_size)
-        x = util.pack(self.starting_guess)
-        self.val_data = load_data(validation_iters)
-
-        for epoch in range(num_epochs):
-            log.info(f'Epoch {epoch}')
-            np.random.shuffle(batch_starts)
-            self.adam = AdamOptimizer(
-                self.cost_for_optimizer, x, num_iter=len(batch_starts),
-                alpha=adam_alpha,
-                beta1=adam_beta1, beta2=adam_beta2, eps=adam_eps)
-
-            for batch_index, batch_start in enumerate(batch_starts):
-                log.info(f'Batch {batch_index} of {batch_starts.size}')
-                pos_iters_to_load = range(batch_start, batch_start + batch_size, 2)
-                neg_iters_to_load = range(batch_start + 1, batch_start + batch_size, 2)
-                self.data: TrainingData = load_data(pos_iters_to_load)
-                self.adam.x = x
-                J, x = self.adam.iterate(batch_index)
-
-            # After each epoch, evaluate error on validation data
-            G = self.unpack(x)['G']
-            H = 4 * bl.batch_mt(bl.batch_mmip(G, self.val_data.Psi))
-            self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.zs))
+            self.val_errors.append(eval_dz_error(G, H, self.val_data.us, self.val_data.dzs))
 
             mean_cost_epoch = np.mean(self.adam.Js)
             self.costs.append(mean_cost_epoch)
