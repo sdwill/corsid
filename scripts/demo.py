@@ -71,13 +71,11 @@ def simulate_data():
 
     us = {}
     xs = {-1: x0}
-    zs = {}
+    zs = {-1: bl.batch_mvip(H, xs[-1])}
     for k in range(num_iter):
         us[k] = np.random.randn(len_u)
         xs[k] = xs[k-1] + bl.batch_mvip(G, us[k]) + np.sqrt(Q) * np.random.randn(num_pix, len_x)
         zs[k] = bl.batch_mvip(H, xs[k]) + np.sqrt(R) * np.random.randn(num_pix, len_z)
-
-    xs.pop(-1)
 
     return xs, us, zs
 
@@ -92,7 +90,7 @@ training_data = TrainingData(
     len_z=len_z,
     len_u=len_u,
     num_iter=num_iter,
-    zs={k: zs[k] for k in training_iters},
+    dzs={k: zs[k]-zs[k-1] for k in training_iters},
     us={k: us[k] for k in training_iters},
     Psi=Psi
 )
@@ -115,13 +113,13 @@ def evaluate_results(G0, Psi, G_id, training_data, validation_data):
     # Compare the error in the predicted data changes vs. the observed data changes
     H0 = 4*bl.batch_mt(bl.batch_mmip(G0, Psi))
     print(f'  Starting error in dz (training): '
-          f'{100*ls.eval_dz_error(G0, H0, training_data.us, training_data.zs):0.2f}%')
+          f'{100*ls.eval_dz_error(G0, H0, training_data.us, training_data.dzs):0.2f}%')
     print(f'     Final error in dz (training): '
-          f'{100*ls.eval_dz_error(G_id, H_id, training_data.us, training_data.zs):0.2f}%')
+          f'{100*ls.eval_dz_error(G_id, H_id, training_data.us, training_data.dzs):0.2f}%')
     print(f'Starting error in dz (validation): '
-          f'{100*ls.eval_dz_error(G0, H0, validation_data.us, validation_data.zs):0.2f}%')
+          f'{100*ls.eval_dz_error(G0, H0, validation_data.us, validation_data.dzs):0.2f}%')
     print(f'   Final error in dz (validation): '
-          f'{100*ls.eval_dz_error(G_id, H_id, validation_data.us, validation_data.zs):0.2f}%')
+          f'{100*ls.eval_dz_error(G_id, H_id, validation_data.us, validation_data.dzs):0.2f}%')
 
     # Compare the identified Jacobian to the true Jacobian
     print(f'     Starting error relative to G: {100*compare(G0, G):0.2f}%')
@@ -142,7 +140,7 @@ validation_data = TrainingData(
     len_z=len_z,
     len_u=len_u,
     num_iter=num_iter,
-    zs={k-num_training_iter: zs[k] for k in validation_iters},
+    dzs={k-num_training_iter: zs[k]-zs[k-1] for k in validation_iters},
     us={k-num_training_iter: us[k] for k in validation_iters},
     Psi=Psi
 )
@@ -156,13 +154,13 @@ def load_data(iters_to_load):
     store the entire training set in RAM and select subsets. In a real experiment, this may not be
     possible. If so, each minibatch is loaded from disk when needed.
     """
-    zs_to_load = {}
+    dzs_to_load = {}
     us_to_load = {}
 
     iters_to_load = list(iters_to_load)
     start = iters_to_load[0]
     for k in iters_to_load:
-        zs_to_load[k-start] = zs[k]
+        dzs_to_load[k-start] = zs[k]-zs[k-1]
         us_to_load[k-start] = us[k]
 
     return TrainingData(
@@ -171,7 +169,7 @@ def load_data(iters_to_load):
         len_z=len_z,
         len_u=len_u,
         num_iter=len(iters_to_load),
-        zs=zs_to_load,
+        dzs=dzs_to_load,
         us=us_to_load,
         Psi=Psi
     )
