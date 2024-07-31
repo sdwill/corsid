@@ -14,8 +14,8 @@ from scipy.linalg import hadamard
 num_pix = 10  # Number of focal-plane pixels
 len_u = 8  # Number of DM actuators
 len_x = 2
-num_iter = 12  # Number of time steps of simulated data
-num_training_iter = 8   # Number of time steps to use for training
+num_iter = 20  # Number of time steps of simulated data
+num_training_iter = 16   # Number of time steps to use for training
 training_iter_start = 0  # Starting time step for training data
 
 training_iters = range(num_training_iter)
@@ -76,23 +76,24 @@ def evaluate_results(G0, G_id, training_data, validation_data):
           f'{100*ti.eval_dI_error(G0, training_data.us, training_data.dIs):0.2f}%')
     print(f'     Final error in dI (training): '
           f'{100*ti.eval_dI_error(G_id, training_data.us, training_data.dIs):0.2f}%')
+    print(f'   Minimum error in dI (training): ',
+          f'{100*ti.eval_dI_error(G, training_data.us, training_data.dIs):0.2f}%')
+
     print(f'Starting error in dI (validation): '
           f'{100*ti.eval_dI_error(G0, validation_data.us, validation_data.dIs):0.2f}%')
     print(f'   Final error in dI (validation): '
           f'{100*ti.eval_dI_error(G_id, validation_data.us, validation_data.dIs):0.2f}%')
+    print(f' Minimum error in dI (validation): '
+          f'{100*ti.eval_dI_error(G, validation_data.us, validation_data.dIs):0.2f}%')
 
     # Compare the identified Jacobian to the true Jacobian
     print(f'     Starting error relative to G: {100*compare(G0, G):0.2f}%')
     print(f'        Final error relative to G: {100*compare(G_id, G):0.2f}%')
 
-    # Note that the identified Jacobian, in general, will be in a different basis than the true
-    # Jacobian, because for any orthonormal transformation P, P*G is consistent with the observed
-    # data. But G.T * G = (P*G).T * (P*G), so compare against that to see how close we got to the
-    # truth, regardless of basis transformations
     print(' Starting error relative to G.T*G: {:0.2f}%'.format(
-        100*compare(bl.batch_mmip(bl.batch_mt(G0), G0), bl.batch_mmip(bl.batch_mt(G), G))))
+        100*compare(G0.conj().T @ G0, G.conj().T @ G)))
     print('    Final error relative to G.T*G: {:0.2f}%'.format(
-        100*compare(bl.batch_mmip(bl.batch_mt(G_id), G_id), bl.batch_mmip(bl.batch_mt(G), G))))
+        100*compare(G_id.conj().T @ G_id, G.conj().T @ G)))
 
 
 validation_data = ti.ThreeImageTrainingData(
@@ -101,6 +102,7 @@ validation_data = ti.ThreeImageTrainingData(
 )
 
 evaluate_results(G0, result.G, training_data, validation_data)
+
 
 #%% Run stochastic optimization using Adam
 
