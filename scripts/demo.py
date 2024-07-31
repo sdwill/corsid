@@ -15,8 +15,8 @@ num_pix = 10  # Number of focal-plane pixels
 len_x = 2  # Length of state vector at each pixel (always 2: real/imaginary part of the E-field)
 len_z = 2  # Length of data vector at each pixel (number of pairwise probe pairs)
 len_u = 8  # Number of DM actuators
-num_iter = 20  # Number of time steps of simulated data
-num_training_iter = 16   # Number of time steps to use for training
+num_iter = 12  # Number of time steps of simulated data
+num_training_iter = 8   # Number of time steps to use for training
 training_iter_start = 0  # Starting time step for training data
 
 training_iters = range(num_training_iter)
@@ -65,21 +65,26 @@ print(f'Mean condition number after optimization: {np.linalg.cond(H).mean():0.2f
 def simulate_data():
     x0 = np.zeros((num_pix, len_x))
 
-    us = {}
+    us = {0: np.zeros(len_u)}
     xs = {-1: x0}
     zs = {-1: bl.batch_mvip(H, x0)}
 
     # Excite the system with Hadamard modes
     cmds = hadamard(2**np.ceil(np.log2(num_iter)))
-    cmds = {k: cmds[:, k][:len_u] for k in range(num_iter)}
+    cmds = {j: cmds[:, j][:len_u] for j in range(num_iter)}
     # cmds = {k: np.random.randn(len_u) for k in range(num_iter)}
 
     cmds[-1] = np.zeros(len_u)
 
-    for k in range(num_iter):
-        us[k] = cmds[k] - cmds[k-1]
-        xs[k] = xs[k-1] + bl.batch_mvip(G, us[k]) + np.sqrt(Q) * np.random.randn(num_pix, len_x)
-        zs[k] = bl.batch_mvip(H, xs[k]) + np.sqrt(R) * np.random.randn(num_pix, len_z)
+    for j in range(num_iter):
+        us[2*j] = cmds[j] + cmds[j-1]
+        us[2*j+1] = -2*cmds[j]
+
+        xs[2*j] = xs[2*j-1] + bl.batch_mvip(G, us[2*j]) + np.sqrt(Q) * np.random.randn(num_pix, len_x)
+        xs[2*j+1] = xs[2*j] + bl.batch_mvip(G, us[2*j+1]) + np.sqrt(Q) * np.random.randn(num_pix, len_x)
+
+        zs[2*j] = bl.batch_mvip(H, xs[2*j]) + np.sqrt(R) * np.random.randn(num_pix, len_z)
+        zs[2*j+1] = bl.batch_mvip(H, xs[2*j+1]) + np.sqrt(R) * np.random.randn(num_pix, len_z)
 
     return xs, us, zs
 
@@ -94,8 +99,8 @@ training_data = TrainingData(
     len_z=len_z,
     len_u=len_u,
     num_iter=num_iter,
-    dzs={k: zs[k]-zs[k-1] for k in training_iters},
-    us={k: us[k] for k in training_iters},
+    dzs={j: zs[2*j+1]-zs[2*j] for j in training_iters},
+    us={j: us[2*j+1] for j in training_iters},
     Psi=Psi
 )
 
@@ -144,8 +149,8 @@ validation_data = TrainingData(
     len_z=len_z,
     len_u=len_u,
     num_iter=num_iter,
-    dzs={k-num_training_iter: zs[k]-zs[k-1] for k in validation_iters},
-    us={k-num_training_iter: us[k] for k in validation_iters},
+    dzs={j - num_training_iter: zs[2*j+1]-zs[2*j] for j in validation_iters},
+    us={j - num_training_iter: us[2*j+1] for j in validation_iters},
     Psi=Psi
 )
 evaluate_results(G0, Psi, result.G, training_data, validation_data)
