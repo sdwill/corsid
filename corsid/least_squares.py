@@ -20,9 +20,8 @@ jax.config.update('jax_enable_x64', True)
 
 def estimate_states(H, zs):
     """ Run pairwise probe estimation to estimate the state in each time step """
-    num_iter = len(list(zs.keys()))
     xs = {}
-    for k in tqdm(range(num_iter), desc='Estimating states', leave=False):
+    for k in tqdm(zs, desc='Estimating states', leave=False):
         xs[k] = util.l1_pairwise_probe_estimator(H, zs[k])
 
     return xs
@@ -31,7 +30,7 @@ def eval_z_error(H, xs, zs):
     """ Evaluate the error between H*x[k] and z[k] in each time step """
     num_iter = len(list(zs.keys()))
     z_err = 0.
-    for k in range(num_iter):
+    for k in zs:
         z_err += util.compare(bl.batch_mvip(H, xs[k]), zs[k])
 
     return z_err / num_iter
@@ -43,7 +42,7 @@ def eval_dx_error(G, dxs, us):
     """
     num_iter = len(list(dxs.keys()))
     dx_err = 0.
-    for k in range(num_iter):
+    for k in dxs:
         dx_err += util.compare(bl.batch_mvip(G, us[k]), dxs[k])
 
     return dx_err / num_iter
@@ -63,7 +62,7 @@ def eval_dz_error(G, H, us, dzs):
     num_iter = len(list(dzs.keys()))
     dz_err = 0.
 
-    for k in range(num_iter):
+    for k in dzs:
         dz = dzs[k]
         u = us[k]
         dz_pred = bl.batch_mvip(H, bl.batch_mvip(G, u))
@@ -72,7 +71,7 @@ def eval_dz_error(G, H, us, dzs):
     return dz_err / num_iter
 
 @jax.jit
-def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, dxs: dict, dzs: dict):
+def least_squares_state_cost(G: np.ndarray, us: dict, dxs: dict):
     """
     Compute the error between the predicted state changes, G*u[k], and actual state changes,
     dx[k], summed over all time steps.
@@ -83,12 +82,11 @@ def least_squares_state_cost(G: np.ndarray, Psi: np.ndarray, us: dict, dxs: dict
     the 1/(u[k] @ u[k]) factor appearing in the cost.
     """
     G = G.astype(jnp.float64)
-    num_iter = len(dzs.keys())
     num_pix = dxs[0].shape[0]
 
     err = jnp.zeros(num_pix)
 
-    for k in range(1, num_iter):
+    for k in dxs:
         dx = dxs[k]
         # dxtot += bl.batch_vvip(dx, dx)
         u = us[k].astype(jnp.float64)  # Cast to float to avoid Jax overflow bug
@@ -109,13 +107,12 @@ def least_squares_cost(G: np.ndarray, Psi: np.ndarray, us: dict, dzs: dict):
     """
     G = G.astype(jnp.float64)
     H = 4 * d.batch_mt(d.batch_mmip(G, Psi))
-    num_iter = len(dzs.keys())
     num_pix = dzs[0].shape[0]
 
     err = jnp.zeros(num_pix)
     dztot = jnp.zeros(num_pix)  # To scale the cost function to be invariant to contrast level
 
-    for k in range(num_iter):
+    for k in dzs:
         dz = dzs[k]
         u = us[k].astype(jnp.float64)  # Cast to float to avoid Jax overflow bug
         dz_pred = d.batch_mvip(H, d.batch_mvip(G, u))

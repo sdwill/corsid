@@ -153,8 +153,8 @@ validation_data = TrainingData(
     len_z=len_z,
     len_u=len_u,
     num_iter=num_iter,
-    dzs={j - num_training_iter: zs[2*j+1]-zs[2*j] for j in validation_iters},
-    us={j - num_training_iter: us[2*j+1] for j in validation_iters},
+    dzs={j: zs[2*j+1]-zs[2*j] for j in validation_iters},
+    us={j: us[2*j+1] for j in validation_iters},
     Psi=Psi
 )
 evaluate_results(G0, Psi, result.G, training_data, validation_data)
