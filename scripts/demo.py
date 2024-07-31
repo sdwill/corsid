@@ -10,6 +10,7 @@ from corsid import TrainingData
 import corsid.least_squares as ls
 
 from scipy.linalg import hadamard
+np.random.seed(3794)
 
 num_pix = 10  # Number of focal-plane pixels
 len_x = 2  # Length of state vector at each pixel (always 2: real/imaginary part of the E-field)
