@@ -143,6 +143,9 @@ def evaluate_results(G0, Psi, G_id, training_data, validation_data):
     print('    Final error relative to G.T*G: {:0.2f}%'.format(
         100*compare(bl.batch_mmip(bl.batch_mt(G_id), G_id), bl.batch_mmip(bl.batch_mt(G), G))))
 
+    print(f'   Starting error relative to H*G: {100 * compare(bl.batch_mmip(H0, G0), bl.batch_mmip(H, G)):0.2f}%')
+    print(f'      Final error relative to H*G: {100 * compare(bl.batch_mmip(H_id, G_id), bl.batch_mmip(H, G)):0.2f}%')
+
 validation_data = TrainingData(
     num_pix=num_pix,
     len_x=len_x,
