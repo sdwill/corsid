@@ -11,18 +11,18 @@ import corsid.three_image as ti
 from scipy.linalg import hadamard
 # np.random.seed(3794)
 
-num_pix = 10  # Number of focal-plane pixels
+num_pix = 8  # Number of focal-plane pixels
 len_u = 8  # Number of DM actuators
 len_x = 2
-num_iter = 20  # Number of time steps of simulated data
-num_training_iter = 16   # Number of time steps to use for training
+num_iter = 100  # Number of time steps of simulated data
+num_training_iter = int(np.ceil(0.8 * num_iter))   # Number of time steps to use for training
 training_iter_start = 0  # Starting time step for training data
 
 training_iters = range(num_training_iter)
 validation_iters = range(num_training_iter, num_iter)
 
 # Real-valued form of Jacobian: each pixel has a 2x(len_u) Jacobian for its real and imagiary parts
-G = np.random.randn(num_pix, len_u) + 1j * np.random.randn(num_pix, len_u)
+G = np.eye(8)
 R = 1e-3  # Measurement noise covariance magnitude
 Q = 1e-3  # Process noise covariance magnitude
 
@@ -58,15 +58,15 @@ training_data = ti.ThreeImageTrainingData(
     dIs={j: dIs[j] for j in training_iters},
     us={j: us[j] for j in training_iters},
 )
-G_err = np.random.randn(*G.shape) + 1j * np.random.randn(*G.shape)
-G0 = G + 0.5 * G_err  # Simulate imperfect starting knowledge
+G_err = np.random.randn(*G.shape)
+G0 = G + 0.1 * G_err  # Simulate imperfect starting knowledge
 
 result = ti.run_batch_least_squares_id(
     data=training_data,
     G0=G0,
     method='L-BFGS-B',
     options=dict(disp=True),
-    tol=1e-6
+    tol=1e-20
 )
 
 #%% Evaluate results from batch optimization
