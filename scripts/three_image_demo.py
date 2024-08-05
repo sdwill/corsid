@@ -11,10 +11,10 @@ import corsid.three_image as ti
 from scipy.linalg import hadamard
 # np.random.seed(3794)
 
-num_pix = 2  # Number of focal-plane pixels
-len_u = 2  # Number of DM actuators
+num_pix = 10  # Number of focal-plane pixels
+len_u = 8  # Number of DM actuators
 len_x = 2
-num_iter = 20  # Number of time steps of simulated data
+num_iter = 30  # Number of time steps of simulated data
 num_training_iter = int(np.ceil(0.8 * num_iter))   # Number of time steps to use for training
 training_iter_start = 0  # Starting time step for training data
 
@@ -59,7 +59,7 @@ training_data = ti.ThreeImageTrainingData(
     us={j: us[j] for j in training_iters},
 )
 G_err = np.random.randn(*G.shape) + 1j * np.random.randn(*G.shape)
-G0 = G + 0.3 * G_err  # Simulate imperfect starting knowledge
+G0 = G + 0.5 * G_err  # Simulate imperfect starting knowledge
 
 result = ti.run_batch_least_squares_id(
     data=training_data,
@@ -87,16 +87,16 @@ def evaluate_results(G0, G_id, training_data, validation_data):
           f'{100*ti.eval_dI_error(G, validation_data.us, validation_data.dIs):0.2f}%')
 
     # Compare the identified Jacobian to the true Jacobian
-    print(f'     Starting error relative to G: {100*compare(G0, G):0.2f}%')
-    print(f'        Final error relative to G: {100*compare(G_id, G):0.2f}%')
+    print(f'        Starting error in G: {100*compare(G0, G):0.2f}%')
+    print(f'           Final error in G: {100*compare(G_id, G):0.2f}%')
 
-    print(f'Starting error relative to abs(G): {100*compare(np.abs(G0), np.abs(G)):0.2f}%')
-    print(f'   Final error relative to abs(G): {100*compare(np.abs(G_id), np.abs(G)):0.2f}%')
+    print(f'   Starting error in abs(G): {100*compare(np.abs(G0), np.abs(G)):0.2f}%')
+    print(f'      Final error in abs(G): {100*compare(np.abs(G_id), np.abs(G)):0.2f}%')
 
-    print(' Starting error relative to G.T*G: {:0.2f}%'.format(
-        100*compare(G0.conj().T @ G0, G.conj().T @ G)))
-    print('    Final error relative to G.T*G: {:0.2f}%'.format(
-        100*compare(G_id.conj().T @ G_id, G.conj().T @ G)))
+    print(' Starting error in Re(G.T*G): {:0.2f}%'.format(
+        100*compare(np.real(G0.conj().T @ G0), np.real(G.conj().T @ G))))
+    print('    Final error in Re(G.T*G): {:0.2f}%'.format(
+        100*compare(np.real(G_id.conj().T @ G_id), np.real(G.conj().T @ G))))
 
 
 validation_data = ti.ThreeImageTrainingData(
