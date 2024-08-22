@@ -39,6 +39,7 @@ class FitToIEFCResult:
     dz_errors: ArrayLike
     dx_errors: ArrayLike
     z_errors: ArrayLike
+    val_errors: ArrayLike = None
 
 
 def fit_iefc_matrix(zs, us):
@@ -61,6 +62,7 @@ def fit_iefc_matrix(zs, us):
 
 def fit_jacobian_to_iefc_matrix(
         data: TrainingData,
+        validation_data: TrainingData,
         G0: ArrayLike,
         method='L-BFGS-B',
         options: Dict = None,
@@ -77,6 +79,7 @@ def fit_jacobian_to_iefc_matrix(
     z_errors = []
     dx_errors = []
     dz_errors = []
+    val_errors = []  # Same as dz_errors, but on validation data
 
     # Obtain iEFC matrix in closed form
     A = fit_iefc_matrix(data.zs, data.us)
@@ -108,6 +111,7 @@ def fit_jacobian_to_iefc_matrix(
             z_errors.append(eval_z_error(H, xs, data.zs))
             dx_errors.append(eval_dx_error(G, xs, data.us))
             dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
+            val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
 
         return J, gradient
 
@@ -131,6 +135,7 @@ def fit_jacobian_to_iefc_matrix(
         dz_errors=np.array(dz_errors),
         dx_errors=np.array(dx_errors),
         z_errors=np.array(z_errors),
+        val_errors=np.array(val_errors)
     )
 
     return result
