@@ -295,7 +295,7 @@ class StochasticLeastSquaresID:
         ax.legend(loc='best')
 
         ax = axs[1]
-        ax.plot(np.arange(len(self.costs)), self.costs, 'o-')
+        ax.semilogy(np.arange(len(self.costs)), self.costs, 'o-')
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Cost')
 
