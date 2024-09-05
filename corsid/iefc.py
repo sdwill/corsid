@@ -60,13 +60,18 @@ def fit_iefc_matrix(zs, us):
     # dZ = A*U, so A_hat = dZ * pinv(U), with dZ and A looped over pixels
     return bl.batch_mmip(dZ, np.linalg.pinv(U))
 
+def list_to_masked(lst):
+    """ Converts a list consisting of floats and None to a masked array with None masked out """
+    return np.ma.masked_invalid(np.array(lst, dtype=np.float64))
+
 def fit_jacobian_to_iefc_matrix(
         data: TrainingData,
         validation_data: TrainingData,
         G0: ArrayLike,
         method='L-BFGS-B',
         options: Dict = None,
-        tol=1e-3
+        tol=1e-3,
+        eval_metrics_every=10,
 ):
     """
     Two-step algorithm for estimating Jacobian matrix: calculate the iEFC matrix in closed form,
@@ -102,9 +107,8 @@ def fit_jacobian_to_iefc_matrix(
         # Evaluate quality-of-fit metrics
         # Only do this after every 10 cost function evaluations to save time
         nonlocal calls
-        calls += 1
 
-        if calls % 10 == 0:
+        if calls % eval_metrics_every == 0:
             H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
             xs = estimate_states(H, data.zs)
 
@@ -112,7 +116,15 @@ def fit_jacobian_to_iefc_matrix(
             dx_errors.append(eval_dx_error(G, xs, data.us))
             dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
             val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
+        else:
+            z_errors.append(None)
+            dx_errors.append(None)
+            dz_errors.append(None)
+            val_errors.append(None)
 
+        # Increment call counter AFTER checking whether to evaluate goodness-of-fit metrics, so
+        # that we get an eval at calls = 0 (at the start of the script)
+        calls += 1
         return J, gradient
 
     if method == 'adam':
@@ -129,13 +141,23 @@ def fit_jacobian_to_iefc_matrix(
                        method=method, options=options, tol=tol)
         solution = res.x
 
+    # Evaluate metrics once more at the end to get their final values
+    G = unpack(solution)['G']
+    H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
+    xs = estimate_states(H, data.zs)
+
+    z_errors.append(eval_z_error(H, xs, data.zs))
+    dx_errors.append(eval_dx_error(G, xs, data.us))
+    dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
+    val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
+
     result = FitToIEFCResult(
-        unpack(solution)['G'],
+        G,
         costs=np.array(costs),
-        dz_errors=np.array(dz_errors),
-        dx_errors=np.array(dx_errors),
-        z_errors=np.array(z_errors),
-        val_errors=np.array(val_errors)
+        dz_errors=list_to_masked(dz_errors),
+        dx_errors=list_to_masked(dx_errors),
+        z_errors=list_to_masked(z_errors),
+        val_errors=list_to_masked(val_errors)
     )
 
     return result
