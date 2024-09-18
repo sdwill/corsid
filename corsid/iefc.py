@@ -147,7 +147,7 @@ def fit_jacobian_to_iefc_matrix(
     xs = estimate_states(H, data.dzs)
 
     z_errors.append(eval_z_error(H, xs, data.dzs))
-    dx_errors.append(eval_dx_error(G, xs, data.dus))
+    dx_errors.append(eval_dx_error(G, xs, data.us))
     dz_errors.append(eval_dz_error(G, H, data.us, data.dzs))
     val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.dzs))
 
