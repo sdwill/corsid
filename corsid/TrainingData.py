@@ -9,7 +9,7 @@ class TrainingData:
             len_z: int = None,      # Length of data vector (number of probe pairs)
             len_u: int = None,      # Length of control vector (number of DM actuators)
             num_iter: int = None,   # Number of iterations of training data (time steps)
-            zs: dict = None,        # Data vectors for each iteration
+            dzs: dict = None,        # Data vectors for each iteration
             us: dict = None,        # Control vectors for each iteration
             Psi: np.ndarray = None  # Probe command matrix (len_u, len_z). Each probe is a column.
     ):
@@ -19,9 +19,9 @@ class TrainingData:
         self.len_u = len_u
         self.num_iter = num_iter
 
-        if zs is None:
-            zs = {}
-        self.zs = zs
+        if dzs is None:
+            dzs = {}
+        self.dzs = dzs
 
         if us is None:
             us = {}

@@ -87,7 +87,7 @@ def fit_jacobian_to_iefc_matrix(
     val_errors = []  # Same as dz_errors, but on validation data
 
     # Obtain iEFC matrix in closed form
-    A = fit_iefc_matrix(data.zs, data.us)
+    A = fit_iefc_matrix(data.dzs, data.us)
 
     # Starting guess for optimizer, containing only the values that we are optimizing
     starting_guess = {'G': G0.astype(np.float64)}
@@ -110,12 +110,12 @@ def fit_jacobian_to_iefc_matrix(
 
         if calls % eval_metrics_every == 0:
             H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
-            xs = estimate_states(H, data.zs)
+            xs = estimate_states(H, data.dzs)
 
-            z_errors.append(eval_z_error(H, xs, data.zs))
+            z_errors.append(eval_z_error(H, xs, data.dzs))
             dx_errors.append(eval_dx_error(G, xs, data.us))
-            dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
-            val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
+            dz_errors.append(eval_dz_error(G, H, data.us, data.dzs))
+            val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.dzs))
         else:
             z_errors.append(None)
             dx_errors.append(None)
@@ -144,12 +144,12 @@ def fit_jacobian_to_iefc_matrix(
     # Evaluate metrics once more at the end to get their final values
     G = unpack(solution)['G']
     H = 4 * bl.batch_mt(bl.batch_mmip(G, data.Psi))
-    xs = estimate_states(H, data.zs)
+    xs = estimate_states(H, data.dzs)
 
-    z_errors.append(eval_z_error(H, xs, data.zs))
-    dx_errors.append(eval_dx_error(G, xs, data.us))
-    dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
-    val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
+    z_errors.append(eval_z_error(H, xs, data.dzs))
+    dx_errors.append(eval_dx_error(G, xs, data.dus))
+    dz_errors.append(eval_dz_error(G, H, data.us, data.dzs))
+    val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.dzs))
 
     result = FitToIEFCResult(
         G,
