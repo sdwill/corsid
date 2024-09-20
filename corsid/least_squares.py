@@ -136,9 +136,11 @@ class LeastSquaresIDResult:
     dz_errors: ArrayLike
     dx_errors: ArrayLike
     z_errors: ArrayLike
+    val_errors: ArrayLike = None
 
 def run_batch_least_squares_id(
         data: TrainingData,
+        validation_data: TrainingData,
         G0: ArrayLike,
         method='L-BFGS-B',
         options: Dict = None,
@@ -151,6 +153,7 @@ def run_batch_least_squares_id(
     dz_errors = []
     dx_errors = []
     z_errors = []
+    val_errors = []
 
     # Starting guess for optimizer, containing only the values that we are optimizing
     starting_guess = {'G': G0.astype(np.float64)}
@@ -175,6 +178,7 @@ def run_batch_least_squares_id(
         z_errors.append(eval_z_error(H, xs, data.zs))
         dx_errors.append(eval_dx_error(G, xs, data.us))
         dz_errors.append(eval_dz_error(G, H, data.us, data.zs))
+        val_errors.append(eval_dz_error(G, H, validation_data.us, validation_data.zs))
 
         log.info(f'J: {J:0.3e}\t ||∂g|| = {np.linalg.norm(gradient):0.3e}')
         return J, gradient
@@ -199,6 +203,7 @@ def run_batch_least_squares_id(
         dz_errors=np.array(dz_errors),
         dx_errors=np.array(dx_errors),
         z_errors=np.array(z_errors),
+        val_errors=np.array(val_errors)
     )
 
     return result
@@ -290,7 +295,7 @@ class StochasticLeastSquaresID:
         ax.legend(loc='best')
 
         ax = axs[1]
-        ax.plot(np.arange(len(self.costs)), self.costs, 'o-')
+        ax.semilogy(np.arange(len(self.costs)), self.costs, 'o-')
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Cost')
 
@@ -337,7 +342,8 @@ class StochasticLeastSquaresID:
                                       costs=np.array(self.costs),
                                       dz_errors=np.array(self.dz_errors),
                                       dx_errors=np.array(self.dx_errors),
-                                      z_errors=np.array(self.z_errors))
+                                      z_errors=np.array(self.z_errors),
+                                      val_errors=np.array(self.val_errors))
 
         return result
 
